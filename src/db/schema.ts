@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
@@ -80,13 +80,18 @@ export const categories = sqliteTable('categories', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$default(() => new Date()),
 });
 
-export const transactions = sqliteTable('transactions', {
-  id: text('id').primaryKey(),
-  homeId: text('home_id').notNull().references(() => homes.id),
-  categoryId: text('category_id').references(() => categories.id),
-  createdBy: text('created_by').notNull(),
-  type: text('type', { enum: ['expense', 'income'] }).notNull(),
-  amount: integer('amount').notNull(),
-  description: text('description').notNull().default(''),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$default(() => new Date()),
-});
+export const transactions = sqliteTable(
+  'transactions',
+  {
+    id: text('id').primaryKey(),
+    homeId: text('home_id').notNull().references(() => homes.id),
+    categoryId: text('category_id').references(() => categories.id),
+    createdBy: text('created_by').notNull(),
+    type: text('type', { enum: ['expense', 'income'] }).notNull(),
+    amount: integer('amount').notNull(),
+    description: text('description').notNull().default(''),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$default(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$default(() => new Date()),
+  },
+  (table) => [index('idx_transactions_home_created').on(table.homeId, table.createdAt)],
+);

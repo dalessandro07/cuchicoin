@@ -1,5 +1,6 @@
 import { createContext, useCallback, useMemo, type ReactNode } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { resolveAuthError } from '@/lib/auth-errors';
 import type { LoginForm, RegisterForm } from '@/lib/validators';
 
 export interface AppSession {
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) {
       console.error('[Auth] Error en signIn:', error);
-      throw new Error(error.message ?? 'Credenciales inválidas');
+      throw new Error(resolveAuthError(error));
     }
     console.log('[Auth] Sesión iniciada correctamente');
   }, []);
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) {
       console.error('[Auth] Error en signUp:', error);
-      throw new Error(error.message ?? 'No se pudo crear la cuenta');
+      throw new Error(resolveAuthError(error));
     }
     console.log('[Auth] Usuario registrado correctamente');
   }, []);

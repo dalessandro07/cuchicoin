@@ -1,100 +1,83 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HomeBalanceCard } from '@/components/home/home-balance-card';
-import { InviteCodeDisplay } from '@/components/home/invite-code-display';
-import { MemberList } from '@/components/home/member-list';
+import { BalanceHeader } from '@/components/finance/balance-header';
+import { EmptyState } from '@/components/finance/empty-state';
+import { QuickActions } from '@/components/finance/quick-actions';
+import { TransactionRow } from '@/components/finance/transaction-row';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useHome } from '@/hooks/use-home';
+import { useMoneyVisibility } from '@/hooks/use-money-visibility';
 import { useTheme } from '@/hooks/use-theme';
+import type { TransactionView } from '@/lib/db-types';
 
-export default function HomeDashboardScreen() {
-  const { currentHome, currentMember, members, leaveHome, syncNow, isSyncing } = useHome();
+export default function DashboardScreen() {
+  const { currentHome, balance, recentTransactions } = useHome();
   const theme = useTheme();
-  const [leaving, setLeaving] = useState(false);
+  const { hidden } = useMoneyVisibility();
 
   if (!currentHome) return null;
 
-  const confirmLeave = () => {
-    Alert.alert(
-      'Salir del hogar',
-      '¿Estás seguro? Si eres el único administrador, el hogar será eliminado para todos los miembros.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Salir',
-          style: 'destructive',
-          onPress: async () => {
-            setLeaving(true);
-            try {
-              await leaveHome();
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'No se pudo salir del hogar';
-              Alert.alert('Error', message);
-            } finally {
-              setLeaving(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  const openNew = (type: 'expense' | 'income') =>
+    router.push({ pathname: '/(app)/transaction', params: { type } });
+
+  const openEdit = (transaction: TransactionView) =>
+    router.push({ pathname: '/(app)/transaction', params: { id: transaction.id } });
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-                {currentHome.name}
-              </Text>
+          <BalanceHeader homeName={currentHome.name} balance={balance} />
+
+          <QuickActions onExpense={() => openNew('expense')} onIncome={() => openNew('income')} />
+
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Últimos movimientos</Text>
+            {recentTransactions.length > 0 ? (
               <Pressable
-                onPress={syncNow}
+                onPress={() => router.push('/(app)/home/history')}
                 hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Sincronizar"
-                style={({ pressed }) => [styles.syncButton, { opacity: pressed || isSyncing ? 0.6 : 1 }]}>
-                <Ionicons
-                  name={isSyncing ? 'sync' : 'sync-outline'}
-                  size={18}
-                  color={theme.textSecondary}
-                />
+                accessibilityRole="button">
+                <Text style={[styles.link, { color: theme.accent }]}>Ver todo</Text>
               </Pressable>
-            </View>
-            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-              {currentHome.currency} · código {currentHome.inviteCode}
-            </Text>
+            ) : null}
           </View>
 
-          <InviteCodeDisplay code={currentHome.inviteCode} />
-
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-              Miembros ({members.length})
-            </Text>
-            <MemberList members={members} currentMemberId={currentMember?.id ?? null} />
+          <View style={[styles.list, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            {recentTransactions.length === 0 ? (
+              <EmptyState
+                icon="wallet-outline"
+                title="Aún no hay movimientos"
+                message="Registra tu primer gasto o ingreso con los botones de arriba."
+              />
+            ) : (
+              recentTransactions.map((transaction, idx) => (
+                <TransactionRow
+                  key={transaction.id}
+                  transaction={transaction}
+                  hidden={hidden}
+                  onPress={openEdit}
+                  showDivider={idx < recentTransactions.length - 1}
+                />
+              ))
+            )}
           </View>
-
-          <HomeBalanceCard memberCount={members.length} />
-
-          <Pressable
-            onPress={confirmLeave}
-            disabled={leaving}
-            accessibilityRole="button"
-            style={({ pressed }) => [
-              styles.leaveButton,
-              { borderColor: theme.danger, opacity: pressed || leaving ? 0.6 : 1 },
-            ]}>
-            <Ionicons name="exit-outline" size={18} color={theme.danger} />
-            <Text style={[styles.leaveText, { color: theme.danger }]}>
-              {leaving ? 'Saliendo…' : 'Salir del hogar'}
-            </Text>
-          </Pressable>
         </ScrollView>
+
+        <Pressable
+          onPress={() => openNew('expense')}
+          accessibilityRole="button"
+          accessibilityLabel="Registrar movimiento"
+          style={({ pressed }) => [
+            styles.fab,
+            { backgroundColor: theme.accent, opacity: pressed ? 0.85 : 1 },
+          ]}>
+          <Ionicons name="add" size={30} color={theme.primaryContrast} />
+        </Pressable>
       </SafeAreaView>
     </ThemedView>
   );
@@ -108,58 +91,45 @@ const styles = StyleSheet.create({
   },
   safe: {
     flex: 1,
+    width: '100%',
     maxWidth: MaxContentWidth,
   },
   scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.five,
+    padding: Spacing.four,
+    paddingBottom: Spacing.six,
     gap: Spacing.four,
   },
-  header: {
-    gap: Spacing.one,
-  },
-  titleRow: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Spacing.two,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    flex: 1,
-  },
-  syncButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subtitle: {
-    fontSize: 13,
-  },
-  section: {
-    gap: Spacing.two,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    fontSize: 17,
+    fontWeight: '700',
   },
-  leaveButton: {
-    flexDirection: 'row',
+  link: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  list: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+  },
+  fab: {
+    position: 'absolute',
+    right: Spacing.four,
+    bottom: Spacing.four,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing.three,
-  },
-  leaveText: {
-    fontSize: 15,
-    fontWeight: '600',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
 });

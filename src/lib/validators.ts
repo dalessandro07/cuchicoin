@@ -39,3 +39,24 @@ export const registerSchema = z
   });
 
 export type RegisterForm = z.infer<typeof registerSchema>;
+
+export const transactionSchema = z.object({
+  amount: z
+    .number({ error: 'Ingresa un monto' })
+    .positive('El monto debe ser mayor a 0')
+    .max(99_999_999, 'El monto es demasiado alto'),
+  type: z.enum(['expense', 'income']),
+  categoryId: z.string().nullable(),
+  description: z.string().max(120, 'Máximo 120 caracteres').optional(),
+});
+
+export type TransactionForm = z.infer<typeof transactionSchema>;
+
+export const categorySchema = z.object({
+  name: z.string().min(2, 'Mínimo 2 caracteres').max(30, 'Máximo 30 caracteres'),
+  type: z.enum(['expense', 'income']),
+  icon: z.string().min(1, 'Selecciona un ícono'),
+  color: z.string().min(1, 'Selecciona un color'),
+});
+
+export type CategoryForm = z.infer<typeof categorySchema>;

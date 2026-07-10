@@ -1,18 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { expo } from '@better-auth/expo';
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
+import { db } from '@/db/server';
 import * as schema from '@/db/schema';
 
-const turso = createClient({
-  url: process.env.TURSO_URL!,
-  authToken: process.env.TURSO_AUTH_TOKEN!,
-});
-
-const db = drizzle(turso);
-
 export const auth = betterAuth({
+  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:8081',
   database: drizzleAdapter(db, {
     provider: 'sqlite',
     schema,

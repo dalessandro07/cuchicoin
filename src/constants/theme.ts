@@ -17,6 +17,8 @@ export const Colors = {
   primaryContrast: '#FFF8F0',
   accent: '#E4A212',
   danger: '#B23A48',
+  success: '#12A150',
+  successBg: '#E4F3EA',
   border: '#E6D6BD',
 } as const;
 
