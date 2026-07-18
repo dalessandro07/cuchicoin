@@ -19,8 +19,9 @@ Cambiar `.env` o el panel de EAS **después** del deploy/build **no** actualiza 
 
 Tras cambiar `EXPO_PUBLIC_*`:
 
-1. Re-export + deploy web: `npm run deploy:api` (usa `eas deploy --environment production`)
+1. Re-export + deploy web: `npm run deploy:api` (export + `eas deploy --prod --environment production`)
 2. Rebuild del APK: `npm run build:apk` (no basta con redeploy del API)
+3. Confirma en DevTools que el HTML carga un `entry-*.js` nuevo y las peticiones van a `https://kuchicoin.expo.app` (no `localhost`)
 
 Opcional: si las vars viven en EAS Environment Variables, sincroniza localmente con `eas env:pull --environment production` antes del export.
 
@@ -47,7 +48,7 @@ Asegúrate de que `.env` / `.env.local` tenga `EXPO_PUBLIC_API_URL=https://kuchi
 npx eas-cli login
 npx eas-cli init
 npm run deploy:api
-# equivalente: expo export --platform web && eas deploy --environment production
+# equivalente: expo export --platform web && eas deploy --prod --environment production
 ```
 
 Anota la URL HTTPS resultante (p. ej. `https://kuchicoin.expo.app`).
