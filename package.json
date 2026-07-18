@@ -61,7 +61,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:push": "node --env-file=.env scripts/push-db.cjs",
 		"export:server": "expo export --platform web",
-		"deploy:api": "expo export --platform web && eas deploy --environment production",
+		"deploy:api": "expo export --platform web && npx eas-cli deploy --prod --environment production --non-interactive",
 		"build:apk": "eas build -p android --profile preview",
 		"build:android": "eas build -p android --profile production"
 	},
