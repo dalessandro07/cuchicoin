@@ -1,23 +1,30 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { categories } from "@/db/schema";
+import { db } from "@/db/server";
+import {
+  ApiError,
+  handle,
+  json,
+  readBody,
+  requireHomeAdmin,
+  requireHomeMember,
+  requireUser,
+} from "@/lib/api-guard";
+import { serializeCategory } from "@/lib/api-serialize";
+import { generateId } from "@/lib/home-defaults";
+import { and, asc, eq, sql } from "drizzle-orm";
 
-import { db } from '@/db/server';
-import { categories } from '@/db/schema';
-import { ApiError, handle, json, readBody, requireHomeMember, requireUser } from '@/lib/api-guard';
-import { serializeCategory } from '@/lib/api-serialize';
-import { generateId } from '@/lib/home-defaults';
-
-const VALID_TYPES = ['expense', 'income'] as const;
+const VALID_TYPES = ["expense", "income"] as const;
 
 export const GET = handle(async (request) => {
   const user = await requireUser(request);
   const url = new URL(request.url);
-  const homeId = url.searchParams.get('homeId');
-  const type = url.searchParams.get('type');
-  if (!homeId) throw new ApiError(400, 'Falta el parámetro homeId');
+  const homeId = url.searchParams.get("homeId");
+  const type = url.searchParams.get("type");
+  if (!homeId) throw new ApiError(400, "Falta el parámetro homeId");
   await requireHomeMember(user.id, homeId);
 
   const conditions = [eq(categories.homeId, homeId)];
-  if (type === 'expense' || type === 'income') {
+  if (type === "expense" || type === "income") {
     conditions.push(eq(categories.type, type));
   }
 
@@ -40,26 +47,42 @@ export const POST = handle(async (request) => {
     color?: string;
   }>(request);
 
-  const homeId = (body.homeId ?? '').trim();
-  const name = (body.name ?? '').trim();
+  const homeId = (body.homeId ?? "").trim();
+  const name = (body.name ?? "").trim();
   const type = body.type as (typeof VALID_TYPES)[number];
-  const icon = (body.icon ?? '').trim();
-  const color = (body.color ?? '').trim();
+  const icon = (body.icon ?? "").trim();
+  const color = (body.color ?? "").trim();
 
-  if (!homeId) throw new ApiError(400, 'Falta el hogar');
+  if (!homeId) throw new ApiError(400, "Falta el hogar");
   if (name.length < 2 || name.length > 30) {
-    throw new ApiError(400, 'El nombre debe tener entre 2 y 30 caracteres');
+    throw new ApiError(400, "El nombre debe tener entre 2 y 30 caracteres");
   }
-  if (!VALID_TYPES.includes(type)) throw new ApiError(400, 'Tipo de categoría inválido');
-  if (!icon) throw new ApiError(400, 'Selecciona un ícono');
-  if (!color) throw new ApiError(400, 'Selecciona un color');
+  if (!VALID_TYPES.includes(type))
+    throw new ApiError(400, "Tipo de categoría inválido");
+  if (!icon) throw new ApiError(400, "Selecciona un ícono");
+  if (!color) throw new ApiError(400, "Selecciona un color");
 
-  await requireHomeMember(user.id, homeId);
+  await requireHomeAdmin(user.id, homeId);
+
+  const [duplicate] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(
+      and(
+        eq(categories.homeId, homeId),
+        eq(categories.type, type),
+        sql`lower(${categories.name}) = ${name.toLowerCase()}`,
+      ),
+    )
+    .limit(1);
+  if (duplicate) {
+    throw new ApiError(400, "Ya existe una categoría con este nombre");
+  }
 
   const [category] = await db
     .insert(categories)
     .values({
-      id: generateId('cat'),
+      id: generateId("cat"),
       homeId,
       name,
       type,

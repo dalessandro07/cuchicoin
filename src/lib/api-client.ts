@@ -13,6 +13,7 @@ import type {
   Balance,
   Category,
   CategoryType,
+  Currency,
   Home,
   HomeRole,
   Member,
@@ -154,10 +155,10 @@ export const financeApi = {
     return data.homes.map((h) => ({ home: toHome(h.home), membership: toMember(h.membership) }));
   },
 
-  async createHome(name: string): Promise<{ home: Home; membership: Member }> {
+  async createHome(name: string, currency: Currency = 'PEN'): Promise<{ home: Home; membership: Member }> {
     const data = await apiFetch<{ home: HomeDTO; membership: MemberDTO }>('/api/homes', {
       method: 'POST',
-      body: { name },
+      body: { name, currency },
     });
     return { home: toHome(data.home), membership: toMember(data.membership) };
   },
@@ -222,10 +223,10 @@ export const financeApi = {
 
   async listTransactions(
     homeId: string,
-    opts?: { limit?: number; month?: string },
+    opts?: { limit?: number; month?: string; memberId?: string },
   ): Promise<TransactionView[]> {
     const data = await apiFetch<{ transactions: TransactionView[] }>('/api/transactions', {
-      query: { homeId, limit: opts?.limit, month: opts?.month },
+      query: { homeId, limit: opts?.limit, month: opts?.month, memberId: opts?.memberId },
     });
     return data.transactions;
   },
@@ -255,9 +256,9 @@ export const financeApi = {
     await apiFetch(`/api/transactions/${id}`, { method: 'DELETE' });
   },
 
-  async listMonths(homeId: string): Promise<MonthBucket[]> {
+  async listMonths(homeId: string, opts?: { memberId?: string }): Promise<MonthBucket[]> {
     const data = await apiFetch<{ months: MonthBucket[] }>('/api/transactions/months', {
-      query: { homeId },
+      query: { homeId, memberId: opts?.memberId },
     });
     return data.months;
   },

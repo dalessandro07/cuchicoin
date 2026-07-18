@@ -4,14 +4,19 @@
  * to `Date`. Amounts are integer cents (S/).
  */
 
-import { client, db } from '@/db/server';
-import { categories, transactions } from '@/db/schema';
-import { DEFAULT_CATEGORIES, generateId } from '@/lib/home-defaults';
-import type { Balance, MonthBucket, MonthlySummary, TransactionView } from '@/lib/db-types';
+import { categories, transactions } from "@/db/schema";
+import { client, db } from "@/db/server";
+import type {
+  Balance,
+  MonthBucket,
+  MonthlySummary,
+  TransactionView,
+} from "@/lib/db-types";
+import { DEFAULT_CATEGORIES, generateId } from "@/lib/home-defaults";
 
 function num(value: unknown): number {
-  if (typeof value === 'bigint') return Number(value);
-  return typeof value === 'number' ? value : Number(value ?? 0);
+  if (typeof value === "bigint") return Number(value);
+  return typeof value === "number" ? value : Number(value ?? 0);
 }
 
 function rowToTransactionView(row: Record<string, unknown>): TransactionView {
@@ -19,16 +24,18 @@ function rowToTransactionView(row: Record<string, unknown>): TransactionView {
     id: String(row.id),
     homeId: String(row.home_id),
     categoryId: row.category_id ? String(row.category_id) : null,
-    type: row.type as 'expense' | 'income',
+    type: row.type as "expense" | "income",
     amount: num(row.amount),
-    description: (row.description as string) ?? '',
+    description: (row.description as string) ?? "",
     createdAt: num(row.created_at),
     updatedAt: num(row.updated_at),
     categoryName: row.category_name ? String(row.category_name) : null,
     categoryIcon: row.category_icon ? String(row.category_icon) : null,
     categoryColor: row.category_color ? String(row.category_color) : null,
     authorMemberId: row.author_id ? String(row.author_id) : null,
-    authorFirstName: row.author_first_name ? String(row.author_first_name) : null,
+    authorFirstName: row.author_first_name
+      ? String(row.author_first_name)
+      : null,
     authorLastName: row.author_last_name ? String(row.author_last_name) : null,
   };
 }
@@ -46,8 +53,9 @@ export async function listTransactions(opts: {
   homeId: string;
   limit?: number;
   month?: string;
+  memberId?: string;
 }): Promise<TransactionView[]> {
-  const where: string[] = ['t.home_id = ?'];
+  const where: string[] = ["t.home_id = ?"];
   const args: (string | number)[] = [opts.homeId];
 
   if (opts.month) {
@@ -55,17 +63,26 @@ export async function listTransactions(opts: {
     args.push(opts.month);
   }
 
-  let sql = `${TRANSACTION_SELECT} WHERE ${where.join(' AND ')} ORDER BY t.created_at DESC, t.id DESC`;
+  if (opts.memberId) {
+    where.push("t.created_by = ?");
+    args.push(opts.memberId);
+  }
+
+  let sql = `${TRANSACTION_SELECT} WHERE ${where.join(" AND ")} ORDER BY t.created_at DESC, t.id DESC`;
   if (opts.limit && opts.limit > 0) {
-    sql += ' LIMIT ?';
+    sql += " LIMIT ?";
     args.push(opts.limit);
   }
 
   const res = await client.execute({ sql, args });
-  return res.rows.map((r) => rowToTransactionView(r as Record<string, unknown>));
+  return res.rows.map((r) =>
+    rowToTransactionView(r as Record<string, unknown>),
+  );
 }
 
-export async function getTransactionView(id: string): Promise<TransactionView | null> {
+export async function getTransactionView(
+  id: string,
+): Promise<TransactionView | null> {
   const res = await client.execute({
     sql: `${TRANSACTION_SELECT} WHERE t.id = ? LIMIT 1`,
     args: [id],
@@ -76,20 +93,34 @@ export async function getTransactionView(id: string): Promise<TransactionView | 
 
 export async function getBalance(homeId: string): Promise<Balance> {
   const res = await client.execute({
-    sql: 'SELECT type, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE home_id = ? GROUP BY type',
+    sql: "SELECT type, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE home_id = ? GROUP BY type",
     args: [homeId],
   });
   let incomeCents = 0;
   let expenseCents = 0;
   for (const r of res.rows) {
     const row = r as Record<string, unknown>;
-    if (row.type === 'income') incomeCents = num(row.total);
-    else if (row.type === 'expense') expenseCents = num(row.total);
+    if (row.type === "income") incomeCents = num(row.total);
+    else if (row.type === "expense") expenseCents = num(row.total);
   }
-  return { incomeCents, expenseCents, balanceCents: incomeCents - expenseCents };
+  return {
+    incomeCents,
+    expenseCents,
+    balanceCents: incomeCents - expenseCents,
+  };
 }
 
-export async function listMonths(homeId: string): Promise<MonthBucket[]> {
+export async function listMonths(
+  homeId: string,
+  memberId?: string,
+): Promise<MonthBucket[]> {
+  const where: string[] = ["home_id = ?"];
+  const args: (string | number)[] = [homeId];
+  if (memberId) {
+    where.push("created_by = ?");
+    args.push(memberId);
+  }
+
   const res = await client.execute({
     sql: `
       SELECT strftime('%Y-%m', created_at, 'unixepoch') AS m,
@@ -97,10 +128,10 @@ export async function listMonths(homeId: string): Promise<MonthBucket[]> {
         COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expense,
         COUNT(*) AS count
       FROM transactions
-      WHERE home_id = ?
+      WHERE ${where.join(" AND ")}
       GROUP BY m
       ORDER BY m DESC`,
-    args: [homeId],
+    args,
   });
   return res.rows
     .map((r) => {
@@ -118,9 +149,13 @@ export async function listMonths(homeId: string): Promise<MonthBucket[]> {
     .filter((bucket) => Boolean(bucket.month));
 }
 
-export async function getMonthlySummary(homeId: string, month: string): Promise<MonthlySummary> {
+export async function getMonthlySummary(
+  homeId: string,
+  month: string,
+): Promise<MonthlySummary> {
   const monthArgs = [homeId, month];
-  const monthWhere = "home_id = ? AND strftime('%Y-%m', created_at, 'unixepoch') = ?";
+  const monthWhere =
+    "home_id = ? AND strftime('%Y-%m', created_at, 'unixepoch') = ?";
 
   const totalsRes = await client.execute({
     sql: `SELECT type, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM transactions WHERE ${monthWhere} GROUP BY type`,
@@ -132,8 +167,8 @@ export async function getMonthlySummary(homeId: string, month: string): Promise<
   for (const r of totalsRes.rows) {
     const row = r as Record<string, unknown>;
     count += num(row.count);
-    if (row.type === 'income') incomeCents = num(row.total);
-    else if (row.type === 'expense') expenseCents = num(row.total);
+    if (row.type === "income") incomeCents = num(row.total);
+    else if (row.type === "expense") expenseCents = num(row.total);
   }
 
   const byCategoryRes = await client.execute({
@@ -151,7 +186,7 @@ export async function getMonthlySummary(homeId: string, month: string): Promise<
   const byCategory = byCategoryRes.rows.map((r) => {
     const row = r as Record<string, unknown>;
     return {
-      type: row.type as 'expense' | 'income',
+      type: row.type as "expense" | "income",
       categoryId: row.category_id ? String(row.category_id) : null,
       name: String(row.name),
       icon: row.icon ? String(row.icon) : null,
@@ -175,9 +210,9 @@ export async function getMonthlySummary(homeId: string, month: string): Promise<
     const row = r as Record<string, unknown>;
     return {
       memberId: row.member_id ? String(row.member_id) : null,
-      firstName: row.first_name ? String(row.first_name) : '—',
-      lastName: row.last_name ? String(row.last_name) : '',
-      type: row.type as 'expense' | 'income',
+      firstName: row.first_name ? String(row.first_name) : "—",
+      lastName: row.last_name ? String(row.last_name) : "",
+      type: row.type as "expense" | "income",
       amountCents: num(row.total),
     };
   });
@@ -193,11 +228,14 @@ export async function getMonthlySummary(homeId: string, month: string): Promise<
   };
 }
 
-export async function seedDefaultCategories(homeId: string, memberId: string): Promise<void> {
+export async function seedDefaultCategories(
+  homeId: string,
+  memberId: string,
+): Promise<void> {
   const now = new Date();
   await db.insert(categories).values(
     DEFAULT_CATEGORIES.map((seed) => ({
-      id: generateId('cat'),
+      id: generateId("cat"),
       homeId,
       name: seed.name,
       type: seed.type,

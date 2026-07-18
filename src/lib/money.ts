@@ -56,6 +56,14 @@ export function formatMonthLabel(month: string): string {
   return `${name} ${year}`;
 }
 
+/** Current calendar month in America/Lima as "YYYY-MM". */
 export function currentMonthKey(date = new Date()): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === 'year')?.value ?? String(date.getFullYear());
+  const month = parts.find((p) => p.type === 'month')?.value ?? '01';
+  return `${year}-${month}`;
 }
