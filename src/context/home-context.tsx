@@ -3,9 +3,9 @@
  * finance data (members, categories, recent movements, balance). All data is
  * server-backed (Turso) via the finance API, so it syncs across devices.
  *
- *   loading     -> hydrating from the server
- *   no-home     -> user is authenticated but not a member of any home
- *   in-home     -> user belongs to at least one home; the most recent is loaded
+ *   loading      -> hydrating from the server
+ *   needs-home   -> authenticated, home list loaded, no active home selected
+ *   in-home      -> a home is selected and its detail is loaded
  */
 
 import { useAuth } from "@/hooks/use-auth";
@@ -21,7 +21,12 @@ import type {
 } from "@/lib/db-types";
 import { createContext, type ReactNode, useCallback, useState } from "react";
 
-export type HomeStatus = "loading" | "no-home" | "in-home";
+export type HomeStatus = "loading" | "needs-home" | "in-home";
+
+export type HomeMembership = {
+	home: Home;
+	membership: Member;
+};
 
 export type CreateTransactionArgs = {
 	type: CategoryType;
@@ -40,6 +45,7 @@ export type CreateCategoryArgs = {
 
 export type HomeContextValue = {
 	status: HomeStatus;
+	homes: HomeMembership[];
 	currentHome: Home | null;
 	currentMember: Member | null;
 	members: Member[];
@@ -49,6 +55,8 @@ export type HomeContextValue = {
 	isSyncing: boolean;
 	/** Increments on every finance mutation so screens can refetch on-demand. */
 	dataVersion: number;
+	selectHome: (homeId: string) => Promise<void>;
+	clearHome: () => void;
 	createHome: (input: {
 		name: string;
 		currency: "PEN" | "USD";
@@ -82,21 +90,16 @@ export const HomeContext = createContext<HomeContextValue | null>(null);
 export function HomeProvider({ children }: { children: ReactNode }) {
 	const { session, status: authStatus } = useAuth();
 	const [status, setStatus] = useState<HomeStatus>("loading");
+	const [homes, setHomes] = useState<HomeMembership[]>([]);
 	const [detail, setDetail] = useState<HomeDetail | null>(null);
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [dataVersion, setDataVersion] = useState(0);
 
 	const loadForUser = useCallback(async () => {
-		const homes = await financeApi.listHomes();
-		if (homes.length === 0) {
-			setDetail(null);
-			setStatus("no-home");
-			return;
-		}
-		const homeId = homes[0].home.id;
-		const loaded = await financeApi.getHomeDetail(homeId);
-		setDetail(loaded);
-		setStatus("in-home");
+		const listed = await financeApi.listHomes();
+		setHomes(listed);
+		setDetail(null);
+		setStatus("needs-home");
 	}, []);
 
 	const refreshDetail = useCallback(async () => {
@@ -118,25 +121,43 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 			return;
 		}
 		if (authStatus !== "authenticated" || !sessionUserId) {
+			setHomes([]);
 			setDetail(null);
-			setStatus("no-home");
+			setStatus("needs-home");
 			return;
 		}
 		setStatus("loading");
 		loadForUser().catch((err) => {
 			console.error("[HomeProvider] loadForUser failed:", err);
+			setHomes([]);
 			setDetail(null);
-			setStatus("no-home");
+			setStatus("needs-home");
 		});
 	});
 
+	const selectHome = useCallback<HomeContextValue["selectHome"]>(
+		async (homeId) => {
+			const loaded = await financeApi.getHomeDetail(homeId);
+			setDetail(loaded);
+			setStatus("in-home");
+			setDataVersion((v) => v + 1);
+		},
+		[],
+	);
+
+	const clearHome = useCallback<HomeContextValue["clearHome"]>(() => {
+		setDetail(null);
+		setStatus("needs-home");
+	}, []);
+
 	const createHome = useCallback<HomeContextValue["createHome"]>(
 		async (input) => {
-			const { home } = await financeApi.createHome(
+			const { home, membership } = await financeApi.createHome(
 				input.name.trim(),
 				input.currency,
 			);
 			const loaded = await financeApi.getHomeDetail(home.id);
+			setHomes((prev) => [{ home, membership }, ...prev]);
 			setDetail(loaded);
 			setStatus("in-home");
 			setDataVersion((v) => v + 1);
@@ -146,10 +167,11 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 	);
 
 	const joinHome = useCallback<HomeContextValue["joinHome"]>(async (input) => {
-		const { home } = await financeApi.joinHome(
+		const { home, membership } = await financeApi.joinHome(
 			input.inviteCode.trim().toUpperCase(),
 		);
 		const loaded = await financeApi.getHomeDetail(home.id);
+		setHomes((prev) => [{ home, membership }, ...prev]);
 		setDetail(loaded);
 		setStatus("in-home");
 		setDataVersion((v) => v + 1);
@@ -234,6 +256,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 
 	const value: HomeContextValue = {
 		status,
+		homes,
 		currentHome: detail?.home ?? null,
 		currentMember: detail?.membership ?? null,
 		members: detail?.members ?? [],
@@ -242,6 +265,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 		balance: detail?.balance ?? EMPTY_BALANCE,
 		isSyncing,
 		dataVersion,
+		selectHome,
+		clearHome,
 		createHome,
 		joinHome,
 		leaveHome,

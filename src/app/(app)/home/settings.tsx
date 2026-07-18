@@ -20,13 +20,19 @@ import { useHome } from "@/hooks/use-home";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function SettingsScreen() {
-	const { currentHome, currentMember, members, leaveHome } = useHome();
+	const { currentHome, currentMember, members, leaveHome, clearHome } =
+		useHome();
 	const { signOut } = useAuth();
 	const theme = useTheme();
 	const [leaving, setLeaving] = useState(false);
 	const isAdmin = currentMember?.role === "admin";
 
 	if (!currentHome) return null;
+
+	const switchHome = () => {
+		clearHome();
+		router.replace("/(app)");
+	};
 
 	const confirmLeave = () => {
 		Alert.alert(
@@ -41,6 +47,7 @@ export default function SettingsScreen() {
 						setLeaving(true);
 						try {
 							await leaveHome();
+							router.replace("/(app)");
 						} catch (err) {
 							Alert.alert(
 								"Error",
@@ -127,6 +134,24 @@ export default function SettingsScreen() {
 					) : null}
 
 					<View style={styles.footerActions}>
+						<Pressable
+							onPress={switchHome}
+							accessibilityRole="button"
+							style={({ pressed }) => [
+								styles.outlineButton,
+								{ borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
+							]}
+						>
+							<Ionicons
+								name="swap-horizontal-outline"
+								size={18}
+								color={theme.text}
+							/>
+							<Text style={[styles.outlineText, { color: theme.text }]}>
+								Cambiar de hogar
+							</Text>
+						</Pressable>
+
 						<Pressable
 							onPress={confirmLeave}
 							disabled={leaving}
