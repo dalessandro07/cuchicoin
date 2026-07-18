@@ -17,7 +17,7 @@
 				"buildType": "apk"
 			},
 			"env": {
-				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app/login"
+				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app"
 			}
 		},
 		"production": {
@@ -25,7 +25,7 @@
 				"buildType": "apk"
 			},
 			"env": {
-				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app/login"
+				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app"
 			}
 		}
 	},
