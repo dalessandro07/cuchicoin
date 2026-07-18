@@ -1,11 +1,16 @@
 /**
  * Base URL for the Expo Router server (auth + finance API routes).
  *
- * - Development: defaults to http://localhost:8081 (emulator/web). On a
- *   physical device, set EXPO_PUBLIC_API_URL to your machine LAN IP.
- * - Production APK: MUST set EXPO_PUBLIC_API_URL at build time to the
- *   deployed HTTPS API origin (EAS Hosting or equivalent). Without it the
- *   app cannot reach Turso (the phone never talks to Turso directly).
+ * - Development (`__DEV__`): defaults to http://localhost:8081. On a physical
+ *   device, set EXPO_PUBLIC_API_URL to your machine LAN IP.
+ * - Production (export / EAS Build): uses EXPO_PUBLIC_API_URL when set; otherwise
+ *   falls back to https://kuchicoin.expo.app (never localhost).
+ *
+ * EXPO_PUBLIC_* is inlined at export/build time — changing .env after deploy
+ * does not update an already published bundle.
  */
+const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
+
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL?.trim() || 'https://kuchicoin.expo.app';
+  fromEnv ||
+  (__DEV__ ? 'http://localhost:8081' : 'https://kuchicoin.expo.app');

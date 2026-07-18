@@ -8,9 +8,25 @@ APK  →  HTTPS (EXPO_PUBLIC_API_URL)  →  API Expo (+api.ts)  →  Turso
 
 Sin un backend desplegado, un APK solo apuntará a `localhost` y fallará.
 
+## Importante: variables `EXPO_PUBLIC_*` se hornean en el bundle
+
+`EXPO_PUBLIC_API_URL` se **inlinea** en el JS en el momento de:
+
+- `npx expo export` (web / EAS Hosting)
+- `eas build` (APK)
+
+Cambiar `.env` o el panel de EAS **después** del deploy/build **no** actualiza un artifact ya publicado. Los deployments son inmutables.
+
+Tras cambiar `EXPO_PUBLIC_*`:
+
+1. Re-export + deploy web: `npm run deploy:api` (usa `eas deploy --environment production`)
+2. Rebuild del APK: `npm run build:apk` (no basta con redeploy del API)
+
+Opcional: si las vars viven en EAS Environment Variables, sincroniza localmente con `eas env:pull --environment production` antes del export.
+
 ## 1. Variables del servidor (EAS Hosting / host)
 
-Configúralas como secretos del proyecto (EAS Secrets o el panel del host):
+Configúralas en EAS Environment Variables para el entorno `production` (visibilidad plaintext o sensitive; no uses secret visibility para Hosting). Van con `eas deploy --environment production` — **no** llevan prefijo `EXPO_PUBLIC_`:
 
 | Variable             | Uso                             |
 | -------------------- | ------------------------------- |
@@ -25,27 +41,29 @@ Configúralas como secretos del proyecto (EAS Secrets o el panel del host):
 
 El proyecto ya usa `web.output: "server"` (ver `app.config.ts`).
 
+Asegúrate de que `.env` / `.env.local` tenga `EXPO_PUBLIC_API_URL=https://kuchicoin.expo.app` **antes** del export (esa URL queda en el bundle del cliente web).
+
 ```bash
 npx eas-cli login
 npx eas-cli init
-npx expo export --platform web
-npx eas-cli deploy
+npm run deploy:api
+# equivalente: expo export --platform web && eas deploy --environment production
 ```
 
-Anota la URL HTTPS resultante (p. ej. `https://kuchicoin-xxxx.expo.app`).
+Anota la URL HTTPS resultante (p. ej. `https://kuchicoin.expo.app`).
 
-En el host, define las variables del servidor anteriores y vuelve a desplegar si hace falta.
+En el host, define las variables del servidor anteriores y vuelve a desplegar si hace falta (`npm run deploy:api` de nuevo).
 
 ## 3. Apuntar el APK al API
 
-1. Edita `eas.json` y reemplaza `https://REPLACE_WITH_EAS_HOSTING_URL` por tu URL real en los perfiles `preview` y `production`.
-2. O define `EXPO_PUBLIC_API_URL` en EAS Environment Variables para el entorno de build.
+1. `eas.json` ya define `EXPO_PUBLIC_API_URL` en los perfiles `preview` y `production`.
+2. O define `EXPO_PUBLIC_API_URL` en EAS Environment Variables para el entorno de build (`preview` / `production`).
 
 ```bash
 # APK interno de prueba
 npm run build:apk
 
-# AAB para Play Store
+# APK / AAB según perfil production
 npm run build:android
 ```
 
@@ -54,10 +72,13 @@ npm run build:android
 - Scheme nativo: `kuchicoin://` (ya en config y `trustedOrigins`).
 - `BETTER_AUTH_URL` debe ser la URL HTTPS pública del API.
 - Android release requiere HTTPS (no HTTP claro).
+- En DevTools / logcat, las peticiones de auth deben ir a `https://kuchicoin.expo.app/api/auth/...`, nunca a `localhost`.
 
 ## 5. Checklist rápido
 
 - [ ] Turso creado y schema aplicado (`npm run db:push`)
-- [ ] API desplegado con `TURSO_*` + `BETTER_AUTH_*`
+- [ ] API desplegado con `TURSO_*` + `BETTER_AUTH_*` vía `--environment production`
+- [ ] `EXPO_PUBLIC_API_URL` presente en `.env` al hacer `expo export`
 - [ ] `EXPO_PUBLIC_API_URL` = URL del API al compilar el APK
-- [ ] Login / crear hogar / movimientos verificados en dispositivo real
+- [ ] Tras cambiar la URL: redeploy web **y** rebuild APK
+- [ ] Login / crear hogar / movimientos verificados (sin `localhost` en la red)
