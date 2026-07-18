@@ -17,7 +17,7 @@
 				"buildType": "apk"
 			},
 			"env": {
-				"EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_EAS_HOSTING_URL"
+				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app/login"
 			}
 		},
 		"production": {
@@ -25,7 +25,7 @@
 				"buildType": "app-bundle"
 			},
 			"env": {
-				"EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_EAS_HOSTING_URL"
+				"EXPO_PUBLIC_API_URL": "https://kuchicoin.expo.app/login"
 			}
 		}
 	},
