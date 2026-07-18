@@ -7,42 +7,41 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  */
 export default ({ config }: ConfigContext): ExpoConfig => {
   const apiOrigin = process.env.EXPO_PUBLIC_API_URL?.trim() || undefined;
+  const brandLogo = "./assets/images/logo.png";
 
   return {
     ...config,
     owner: "dalessandrorvs-team",
-    name: "kuchicoin-app",
+    name: "KuchiCoin",
     slug: "kuchicoin",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: brandLogo,
     scheme: "kuchicoin",
     userInterfaceStyle: "automatic",
     ios: {
-      icon: "./assets/expo.icon",
+      icon: brandLogo,
     },
     android: {
       adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
-        monochromeImage: "./assets/images/android-icon-monochrome.png",
+        foregroundImage: brandLogo,
+        backgroundColor: "#000000",
       },
       predictiveBackGestureEnabled: false,
       package: "com.anonymous.kuchicoinapp",
     },
     web: {
       output: "server",
-      favicon: "./assets/images/favicon.png",
+      favicon: brandLogo,
     },
     plugins: [
       apiOrigin ? ["expo-router", { origin: apiOrigin }] : "expo-router",
       [
         "expo-splash-screen",
         {
-          backgroundColor: "#208AEF",
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 76,
+          backgroundColor: "#000000",
+          image: brandLogo,
+          imageWidth: 220,
         },
       ],
     ],
