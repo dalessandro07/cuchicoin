@@ -7,7 +7,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 const authBaseURL = (
   process.env.BETTER_AUTH_URL ??
   process.env.EXPO_PUBLIC_API_URL ??
-  "http://localhost:8081"
+  "https://kuchicoin.expo.app"
 ).replace(/\/$/, "");
 
 const extraTrustedOrigins = (process.env.TRUSTED_ORIGINS ?? "")

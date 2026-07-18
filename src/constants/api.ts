@@ -8,4 +8,4 @@
  *   app cannot reach Turso (the phone never talks to Turso directly).
  */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL?.trim() || 'http://localhost:8081';
+  process.env.EXPO_PUBLIC_API_URL?.trim() || 'https://kuchicoin.expo.app';
