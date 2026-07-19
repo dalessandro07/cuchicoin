@@ -2,6 +2,7 @@ import { AuthInput } from "@/components/auth/auth-input";
 import { PrimaryButton } from "@/components/auth/primary-button";
 import { AmountInput } from "@/components/finance/amount-input";
 import { CategoryPicker } from "@/components/finance/category-picker";
+import { DateTimeField } from "@/components/finance/datetime-field";
 import { EmptyState } from "@/components/finance/empty-state";
 import { TypeToggle } from "@/components/finance/type-toggle";
 import { ThemedView } from "@/components/themed-view";
@@ -34,6 +35,8 @@ type FormInitial = {
 	amountText: string;
 	categoryId: string | null;
 	description: string;
+	/** Unix seconds; defaults to now when omitted. */
+	occurredAtSecs?: number;
 };
 
 function TransactionForm({ initial }: { initial: FormInitial }) {
@@ -55,6 +58,12 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 		initial.categoryId,
 	);
 	const [description, setDescription] = useState(initial.description);
+	const [occurredAt, setOccurredAt] = useState(
+		() =>
+			new Date(
+				(initial.occurredAtSecs ?? Math.floor(Date.now() / 1000)) * 1000,
+			),
+	);
 	const [submitting, setSubmitting] = useState(false);
 
 	const tint = type === "income" ? theme.success : theme.danger;
@@ -70,6 +79,7 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 
 	const persist = async (cents: number) => {
 		setSubmitting(true);
+		const date = Math.floor(occurredAt.getTime() / 1000);
 		try {
 			if (isEdit && initial.id) {
 				await updateTransaction(initial.id, {
@@ -77,6 +87,7 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 					amount: cents,
 					categoryId,
 					description,
+					date,
 				});
 			} else {
 				await createTransaction({
@@ -84,6 +95,7 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 					amount: cents,
 					categoryId,
 					description,
+					date,
 				});
 			}
 			router.back();
@@ -209,6 +221,8 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 					returnKeyType="done"
 				/>
 
+				<DateTimeField value={occurredAt} onChange={setOccurredAt} />
+
 				<PrimaryButton
 					title={isEdit ? "Guardar cambios" : "Registrar"}
 					onPress={onSave}
@@ -262,8 +276,16 @@ function EditLoader({ id }: { id: string }) {
 		amountText: formatSoles(data.amount, { withSymbol: false }),
 		categoryId: data.categoryId,
 		description: data.description,
+		occurredAtSecs: data.createdAt,
 	};
 	return <TransactionForm initial={initial} />;
+}
+
+function parseDateParam(raw: string | undefined): number | undefined {
+	if (typeof raw !== "string" || raw.length === 0) return undefined;
+	const secs = Number(raw);
+	if (!Number.isFinite(secs) || secs <= 0) return undefined;
+	return Math.floor(secs);
 }
 
 export default function TransactionModal() {
@@ -274,6 +296,7 @@ export default function TransactionModal() {
 		description?: string;
 		categoryId?: string;
 		fromScan?: string;
+		date?: string;
 	}>();
 	const theme = useTheme();
 	const id = typeof params.id === "string" ? params.id : undefined;
@@ -287,6 +310,9 @@ export default function TransactionModal() {
 		typeof params.categoryId === "string" && params.categoryId.length > 0
 			? params.categoryId
 			: null;
+	const occurredAtSecs = parseDateParam(
+		typeof params.date === "string" ? params.date : undefined,
+	);
 
 	const title = id
 		? "Editar movimiento"
@@ -323,6 +349,7 @@ export default function TransactionModal() {
 							amountText,
 							categoryId,
 							description,
+							occurredAtSecs,
 						}}
 					/>
 				)}

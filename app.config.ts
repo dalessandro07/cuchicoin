@@ -40,7 +40,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-splash-screen",
         {
-          backgroundColor: "#000000",
+          backgroundColor: "#fff8f0",
           image: brandLogo,
           imageWidth: 220,
         },
@@ -87,6 +87,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
             "KuchiCoin necesita reconocimiento de voz para el asistente.",
         },
       ],
+      "@react-native-community/datetimepicker",
     ],
     experiments: {
       typedRoutes: true,

@@ -182,6 +182,8 @@ export type AnalyzeReceiptResult = {
   amountCents: number;
   description: string;
   categoryId: string | null;
+  /** Unix seconds (America/Lima resolution). */
+  date: number;
 };
 
 export const financeApi = {
@@ -314,7 +316,14 @@ export const financeApi = {
         method: 'POST',
         body: input,
       });
-      return data.analysis;
+      const analysis = data.analysis;
+      return {
+        ...analysis,
+        date:
+          typeof analysis.date === 'number' && Number.isFinite(analysis.date)
+            ? analysis.date
+            : Math.floor(Date.now() / 1000),
+      };
     } catch (err) {
       if (err instanceof ApiClientError && err.status === 404) {
         throw new ApiClientError(

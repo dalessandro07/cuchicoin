@@ -78,6 +78,7 @@ export default function ScanReceiptModal() {
 		amountCents: number;
 		description: string;
 		categoryId: string | null;
+		date: number;
 	}) => {
 		setPhase("done");
 		resetShareIntent();
@@ -89,6 +90,7 @@ export default function ScanReceiptModal() {
 				description: analysis.description,
 				categoryId: analysis.categoryId ?? "",
 				fromScan: "1",
+				date: String(analysis.date),
 			},
 		});
 	};

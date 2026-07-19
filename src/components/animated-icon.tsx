@@ -9,7 +9,7 @@ import { BRAND } from "@/constants/brand";
 
 const INITIAL_SCALE_FACTOR = Dimensions.get("screen").height / 90;
 const DURATION = 600;
-const SPLASH_BG = "#000000";
+const SPLASH_BG = "#fff8f0";
 
 export function AnimatedSplashOverlay() {
 	const [animate, setAnimate] = useState(false);
