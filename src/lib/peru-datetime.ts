@@ -39,6 +39,61 @@ function limaParts(now = new Date()) {
 	};
 }
 
+export type LimaParts = ReturnType<typeof limaParts>;
+
+/** Lima wall-clock parts for an instant. */
+export function getLimaParts(date = new Date()): LimaParts {
+	return limaParts(date);
+}
+
+/**
+ * Date whose *device-local* Y/M/D/H/M match Lima wall-clock of `instant`.
+ * Feed this to DateTimePicker so the UI shows Peru time regardless of device TZ.
+ */
+export function toPickerLocalDate(instant: Date): Date {
+	const p = limaParts(instant);
+	return new Date(
+		Number(p.year),
+		Number(p.month) - 1,
+		Number(p.day),
+		Number(p.hour),
+		Number(p.minute),
+		0,
+		0,
+	);
+}
+
+/**
+ * Reads device-local Y/M/D/H/M from a picker Date and interprets them as Lima.
+ */
+export function fromPickerLocalDate(pickerDate: Date): Date {
+	const y = pickerDate.getFullYear();
+	const m = String(pickerDate.getMonth() + 1).padStart(2, "0");
+	const d = String(pickerDate.getDate()).padStart(2, "0");
+	const hh = String(pickerDate.getHours()).padStart(2, "0");
+	const mm = String(pickerDate.getMinutes()).padStart(2, "0");
+	return limaLocalToDate(`${y}-${m}-${d}`, `${hh}:${mm}`) ?? pickerDate;
+}
+
+/** Keep Lima time, replace calendar day with picker local Y/M/D (as Lima). */
+export function applyPickerDate(current: Date, selected: Date): Date {
+	const t = limaParts(current);
+	const y = selected.getFullYear();
+	const m = String(selected.getMonth() + 1).padStart(2, "0");
+	const d = String(selected.getDate()).padStart(2, "0");
+	return limaLocalToDate(`${y}-${m}-${d}`, `${t.hour}:${t.minute}`) ?? current;
+}
+
+/** Keep Lima date, replace clock with picker local H:M (as Lima). */
+export function applyPickerTime(current: Date, selected: Date): Date {
+	const d = limaParts(current);
+	const hh = String(selected.getHours()).padStart(2, "0");
+	const mm = String(selected.getMinutes()).padStart(2, "0");
+	return (
+		limaLocalToDate(`${d.year}-${d.month}-${d.day}`, `${hh}:${mm}`) ?? current
+	);
+}
+
 /** Current wall-clock in Lima as YYYY-MM-DD and HH:mm. */
 export function limaNowStrings(now = new Date()): {
 	date: string;

@@ -7,31 +7,31 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
-import { formatLimaDateTime, PERU_TZ } from "@/lib/peru-datetime";
+import {
+	applyPickerDate,
+	applyPickerTime,
+	formatLimaDateTime,
+	limaLocalToDate,
+	toPickerLocalDate,
+} from "@/lib/peru-datetime";
 
 export type DateTimeFieldProps = {
 	value: Date;
 	onChange: (next: Date) => void;
-	/** Maximum selectable date (defaults to now + small buffer). */
+	/** Maximum selectable date (defaults to now). */
 	maximumDate?: Date;
 };
 
 type PickerMode = "date" | "time" | null;
 
 function toDatetimeLocalValue(date: Date): string {
-	const parts = new Intl.DateTimeFormat("en-CA", {
-		timeZone: PERU_TZ,
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		hour12: false,
-	}).formatToParts(date);
-	const get = (type: Intl.DateTimeFormatPartTypes) =>
-		parts.find((p) => p.type === type)?.value ?? "00";
-	const hour = get("hour") === "24" ? "00" : get("hour");
-	return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+	const picker = toPickerLocalDate(date);
+	const y = picker.getFullYear();
+	const m = String(picker.getMonth() + 1).padStart(2, "0");
+	const d = String(picker.getDate()).padStart(2, "0");
+	const hh = String(picker.getHours()).padStart(2, "0");
+	const mm = String(picker.getMinutes()).padStart(2, "0");
+	return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
 export function DateTimeField({
@@ -43,6 +43,9 @@ export function DateTimeField({
 	const [pickerMode, setPickerMode] = useState<PickerMode>(null);
 	const label = formatLimaDateTime(Math.floor(value.getTime() / 1000));
 	const max = maximumDate ?? new Date();
+	// Show Lima wall-clock in the native picker even if device TZ ≠ Peru.
+	const pickerValue = toPickerLocalDate(value);
+	const pickerMax = toPickerLocalDate(max);
 
 	const applyNativeChange = (event: DateTimePickerEvent, selected?: Date) => {
 		if (Platform.OS === "android") {
@@ -54,24 +57,15 @@ export function DateTimeField({
 		}
 
 		if (pickerMode === "date") {
-			const next = new Date(value);
-			next.setFullYear(
-				selected.getFullYear(),
-				selected.getMonth(),
-				selected.getDate(),
-			);
-			onChange(next);
+			onChange(applyPickerDate(value, selected));
 			if (Platform.OS === "android") {
-				// Chain into time picker after date on Android.
 				setTimeout(() => setPickerMode("time"), 0);
 			}
 			return;
 		}
 
 		if (pickerMode === "time") {
-			const next = new Date(value);
-			next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-			onChange(next);
+			onChange(applyPickerTime(value, selected));
 			if (Platform.OS === "android") setPickerMode(null);
 		}
 	};
@@ -98,8 +92,10 @@ export function DateTimeField({
 						onChange: (e: { target: { value: string } }) => {
 							const raw = e.target.value;
 							if (!raw) return;
-							const parsed = new Date(raw);
-							if (!Number.isNaN(parsed.getTime())) onChange(parsed);
+							const [datePart, timePart] = raw.split("T");
+							if (!datePart || !timePart) return;
+							const next = limaLocalToDate(datePart, timePart);
+							if (next) onChange(next);
 						},
 						style: {
 							flex: 1,
@@ -152,11 +148,11 @@ export function DateTimeField({
 
 			{pickerMode ? (
 				<DateTimePicker
-					value={value}
+					value={pickerValue}
 					mode={pickerMode}
 					display={Platform.OS === "ios" ? "spinner" : "default"}
 					onChange={applyNativeChange}
-					maximumDate={max}
+					maximumDate={pickerMax}
 					is24Hour
 					locale="es-PE"
 				/>
