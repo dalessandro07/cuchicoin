@@ -19,7 +19,13 @@ import type {
 	Member,
 	TransactionView,
 } from "@/lib/db-types";
-import { createContext, type ReactNode, useCallback, useState } from "react";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useRef,
+	useState,
+} from "react";
 
 export type HomeStatus = "loading" | "needs-home" | "in-home";
 
@@ -94,6 +100,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 	const [detail, setDetail] = useState<HomeDetail | null>(null);
 	const [isSyncing, setIsSyncing] = useState(false);
 	const [dataVersion, setDataVersion] = useState(0);
+	const detailRef = useRef<HomeDetail | null>(null);
+	detailRef.current = detail;
 
 	const loadForUser = useCallback(async () => {
 		const listed = await financeApi.listHomes();
@@ -103,11 +111,12 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const refreshDetail = useCallback(async () => {
-		if (!detail) return;
-		const loaded = await financeApi.getHomeDetail(detail.home.id);
+		const active = detailRef.current;
+		if (!active) return;
+		const loaded = await financeApi.getHomeDetail(active.home.id);
 		setDetail(loaded);
 		setDataVersion((v) => v + 1);
-	}, [detail]);
+	}, []);
 
 	// Auth-driven external sync. The effect lives inside a reusable hook.
 	const sessionUserId = session?.user.id ?? null;
@@ -187,9 +196,21 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 		setDataVersion((v) => v + 1);
 	}, [detail, loadForUser]);
 
+	/** Reloads the home list and keeps the active home if the user still belongs. */
 	const refresh = useCallback<HomeContextValue["refresh"]>(async () => {
-		await loadForUser();
-	}, [loadForUser]);
+		const listed = await financeApi.listHomes();
+		setHomes(listed);
+		const activeId = detailRef.current?.home.id;
+		if (activeId && listed.some((h) => h.home.id === activeId)) {
+			const loaded = await financeApi.getHomeDetail(activeId);
+			setDetail(loaded);
+			setStatus("in-home");
+		} else if (activeId) {
+			setDetail(null);
+			setStatus("needs-home");
+		}
+		setDataVersion((v) => v + 1);
+	}, []);
 
 	const syncNow = useCallback<HomeContextValue["syncNow"]>(async () => {
 		setIsSyncing(true);

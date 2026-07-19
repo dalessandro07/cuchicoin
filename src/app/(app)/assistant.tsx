@@ -40,16 +40,21 @@ const WELCOME: ChatBubble = {
 
 export default function AssistantModal() {
 	const theme = useTheme();
-	const { currentHome, refresh } = useHome();
+	const { currentHome, status: homeStatus, syncNow } = useHome();
 	const [messages, setMessages] = useState<ChatBubble[]>([WELCOME]);
 	const [input, setInput] = useState("");
 	const [sending, setSending] = useState(false);
 	const listRef = useRef<FlatList<ChatBubble>>(null);
 	const historyRef = useRef<{ role: ChatRole; content: string }[]>([]);
+	/** Pin home for this modal session so a context refresh cannot blank the chat. */
+	const homeIdRef = useRef<string | null>(currentHome?.id ?? null);
+	if (currentHome?.id) homeIdRef.current = currentHome.id;
+	const homeId = homeIdRef.current ?? currentHome?.id ?? null;
 
 	const sendText = async (raw: string) => {
 		const text = raw.trim();
-		if (!text || !currentHome || sending) return;
+		const activeHomeId = homeIdRef.current ?? currentHome?.id ?? null;
+		if (!text || !activeHomeId || sending) return;
 
 		const userMsg: ChatBubble = {
 			id: `u-${Date.now()}`,
@@ -69,7 +74,7 @@ export default function AssistantModal() {
 
 		try {
 			const result = await financeApi.chatAssistant({
-				homeId: currentHome.id,
+				homeId: activeHomeId,
 				messages: nextHistory,
 			});
 
@@ -87,7 +92,11 @@ export default function AssistantModal() {
 			historyRef.current = withReply;
 
 			if (result.transaction) {
-				await refresh();
+				try {
+					await syncNow();
+				} catch {
+					/* keep chat usable even if dashboard sync fails */
+				}
 				const label =
 					result.transaction.type === "expense" ? "gasto" : "ingreso";
 				const confirm =
@@ -141,11 +150,37 @@ export default function AssistantModal() {
 		}
 	};
 
-	if (!currentHome) {
+	if (homeStatus === "loading" && !homeId) {
 		return (
 			<ThemedView style={styles.container}>
 				<SafeAreaView style={styles.safe}>
-					<Text style={{ color: theme.text, padding: Spacing.four }}>
+					<View style={styles.centered}>
+						<ActivityIndicator color={theme.primary} />
+					</View>
+				</SafeAreaView>
+			</ThemedView>
+		);
+	}
+
+	if (!homeId) {
+		return (
+			<ThemedView style={styles.container}>
+				<SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+					<View style={styles.header}>
+						<Pressable
+							onPress={() => router.back()}
+							hitSlop={10}
+							accessibilityRole="button"
+							accessibilityLabel="Cerrar"
+						>
+							<Ionicons name="close" size={26} color={theme.text} />
+						</Pressable>
+						<Text style={[styles.headerTitle, { color: theme.text }]}>
+							Asistente
+						</Text>
+						<View style={styles.headerSpacer} />
+					</View>
+					<Text style={[styles.emptyHint, { color: theme.textSecondary }]}>
 						Elige un hogar antes de usar el asistente.
 					</Text>
 				</SafeAreaView>
@@ -329,6 +364,16 @@ const styles = StyleSheet.create({
 	},
 	headerSpacer: {
 		width: 26,
+	},
+	centered: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	emptyHint: {
+		padding: Spacing.four,
+		fontSize: 15,
+		lineHeight: 22,
 	},
 	list: {
 		paddingHorizontal: Spacing.four,
