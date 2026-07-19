@@ -1,4 +1,5 @@
 import { PrimaryButton } from "@/components/auth/primary-button";
+import { ScanGleamOverlay } from "@/components/finance/scan-gleam-overlay";
 import { HomeListRow } from "@/components/home/home-list-row";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Radius, Spacing } from "@/constants/theme";
@@ -247,6 +248,7 @@ export default function ScanReceiptModal() {
 
 	const pickingHome = phase === "pick-home";
 	const hasHomes = homes.length > 0;
+	const scanning = phase === "ocr" || phase === "ai";
 
 	const statusLabel = pickingHome
 		? hasHomes
@@ -295,11 +297,14 @@ export default function ScanReceiptModal() {
 						]}
 					>
 						{imageUri ? (
-							<Image
-								source={{ uri: imageUri }}
-								style={styles.image}
-								contentFit="contain"
-							/>
+							<>
+								<Image
+									source={{ uri: imageUri }}
+									style={styles.image}
+									contentFit="contain"
+								/>
+								<ScanGleamOverlay active={scanning} />
+							</>
 						) : (
 							<View style={styles.placeholder}>
 								<Ionicons
