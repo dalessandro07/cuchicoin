@@ -2,6 +2,9 @@
  * Redis Streams helpers for family-home realtime events.
  * Server-only — used from Expo API routes. Publish is best-effort:
  * Redis failures must never fail the HTTP mutation.
+ *
+ * Connections are per-request (no module singleton). EAS Hosting runs on
+ * Cloudflare Workers, which must not share TCP sockets across requests.
  */
 
 import Redis from "ioredis";
@@ -25,92 +28,45 @@ export type HomeRealtimeEvent = {
 
 const STREAM_PREFIX = "home:events:";
 const MAX_LEN = 200;
-
-let redis: Redis | null = null;
-let redisDisabled = false;
+const XREAD_COUNT = 100;
 
 function streamKey(homeId: string): string {
   return `${STREAM_PREFIX}${homeId}`;
 }
 
-function getRedis(): Redis | null {
-  if (redisDisabled) return null;
-  if (redis) return redis;
-
+function redisUrl(): string | null {
   const url = process.env.REDIS_URL?.trim();
   if (!url) {
-    redisDisabled = true;
     console.warn("[realtime] REDIS_URL missing; realtime disabled");
     return null;
   }
-
-  try {
-    redis = new Redis(url, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: false,
-      lazyConnect: true,
-      connectTimeout: 5_000,
-    });
-    redis.on("error", (err) => {
-      console.warn("[realtime] Redis error:", err.message);
-    });
-    return redis;
-  } catch (err) {
-    redisDisabled = true;
-    console.warn("[realtime] Failed to create Redis client:", err);
-    return null;
-  }
+  return url;
 }
 
-async function ensureRedis(): Promise<Redis | null> {
-  const client = getRedis();
-  if (!client) return null;
-  if (client.status === "ready") return client;
-  if (client.status === "connecting" || client.status === "connect") {
-    await new Promise<void>((resolve, reject) => {
-      const onReady = () => {
-        client.off("error", onError);
-        resolve();
-      };
-      const onError = (err: Error) => {
-        client.off("ready", onReady);
-        reject(err);
-      };
-      client.once("ready", onReady);
-      client.once("error", onError);
-    });
-    return client;
-  }
-  await client.connect();
-  return client;
-}
+/**
+ * Open a fresh Redis connection, run `fn`, then always close.
+ * Required on EAS Hosting (Workers) — never reuse sockets across requests.
+ */
+async function withRedis<T>(fn: (client: Redis) => Promise<T>): Promise<T | null> {
+  const url = redisUrl();
+  if (!url) return null;
 
-export async function publishHomeEvent(
-  homeId: string,
-  event: Omit<HomeRealtimeEvent, "at"> & { at?: number },
-): Promise<void> {
-  const payload: HomeRealtimeEvent = {
-    type: event.type,
-    actorUserId: event.actorUserId,
-    at: event.at ?? Math.floor(Date.now() / 1000),
-    ...(event.entityId ? { entityId: event.entityId } : {}),
-  };
+  const client = new Redis(url, {
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+    enableOfflineQueue: false,
+    lazyConnect: true,
+    connectTimeout: 5_000,
+  });
+  client.on("error", (err) => {
+    console.warn("[realtime] Redis error:", err.message);
+  });
 
   try {
-    const client = await ensureRedis();
-    if (!client) return;
-    const key = streamKey(homeId);
-    await client.xadd(
-      key,
-      "MAXLEN",
-      "~",
-      String(MAX_LEN),
-      "*",
-      "data",
-      JSON.stringify(payload),
-    );
-  } catch (err) {
-    console.warn("[realtime] publishHomeEvent failed:", err);
+    await client.connect();
+    return await fn(client);
+  } finally {
+    client.disconnect();
   }
 }
 
@@ -130,6 +86,34 @@ function parseEvent(
   }
 }
 
+export async function publishHomeEvent(
+  homeId: string,
+  event: Omit<HomeRealtimeEvent, "at"> & { at?: number },
+): Promise<void> {
+  const payload: HomeRealtimeEvent = {
+    type: event.type,
+    actorUserId: event.actorUserId,
+    at: event.at ?? Math.floor(Date.now() / 1000),
+    ...(event.entityId ? { entityId: event.entityId } : {}),
+  };
+
+  try {
+    await withRedis(async (client) => {
+      await client.xadd(
+        streamKey(homeId),
+        "MAXLEN",
+        "~",
+        String(MAX_LEN),
+        "*",
+        "data",
+        JSON.stringify(payload),
+      );
+    });
+  } catch (err) {
+    console.warn("[realtime] publishHomeEvent failed:", err);
+  }
+}
+
 /**
  * Read events after `afterId`. If `afterId` is empty, return no events and the
  * current tip id (so clients start live without replaying history).
@@ -139,30 +123,44 @@ export async function readHomeEvents(
   afterId: string,
 ): Promise<{ events: HomeRealtimeEvent[]; lastId: string }> {
   try {
-    const client = await ensureRedis();
-    if (!client) {
+    const result = await withRedis(async (client) => {
+      const key = streamKey(homeId);
+
+      if (!afterId) {
+        const latest = await client.xrevrange(key, "+", "-", "COUNT", 1);
+        const tip = latest[0]?.[0] ?? "0-0";
+        return { events: [] as HomeRealtimeEvent[], lastId: tip };
+      }
+
+      // XREAD returns entries with IDs strictly greater than afterId.
+      const rows = await client.xread(
+        "COUNT",
+        String(XREAD_COUNT),
+        "STREAMS",
+        key,
+        afterId,
+      );
+
+      const events: HomeRealtimeEvent[] = [];
+      let lastId = afterId;
+
+      if (rows) {
+        for (const [, messages] of rows) {
+          for (const [id, fields] of messages) {
+            lastId = id;
+            const parsed = parseEvent(id, fields);
+            if (parsed) events.push(parsed.event);
+          }
+        }
+      }
+
+      return { events, lastId };
+    });
+
+    if (!result) {
       return { events: [], lastId: afterId || "0-0" };
     }
-
-    const key = streamKey(homeId);
-
-    if (!afterId) {
-      const latest = await client.xrevrange(key, "+", "-", "COUNT", 1);
-      const tip = latest[0]?.[0] ?? "0-0";
-      return { events: [], lastId: tip };
-    }
-
-    const rows = await client.xrange(key, `(${afterId}`, "+");
-    const events: HomeRealtimeEvent[] = [];
-    let lastId = afterId;
-
-    for (const [id, fields] of rows) {
-      lastId = id;
-      const parsed = parseEvent(id, fields);
-      if (parsed) events.push(parsed.event);
-    }
-
-    return { events, lastId };
+    return result;
   } catch (err) {
     console.warn("[realtime] readHomeEvents failed:", err);
     return { events: [], lastId: afterId || "0-0" };

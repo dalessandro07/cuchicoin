@@ -70,6 +70,7 @@ export type HomeContextValue = {
 	}) => Promise<Home>;
 	joinHome: (input: { inviteCode: string }) => Promise<Home>;
 	leaveHome: () => Promise<void>;
+	removeMember: (memberId: string) => Promise<void>;
 	refresh: () => Promise<void>;
 	syncNow: () => Promise<void>;
 	createTransaction: (input: CreateTransactionArgs) => Promise<void>;
@@ -197,6 +198,16 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 		setDataVersion((v) => v + 1);
 	}, [detail, loadForUser]);
 
+	const removeMember = useCallback<HomeContextValue["removeMember"]>(
+		async (memberId) => {
+			const activeHomeId = detailRef.current?.home.id;
+			if (!activeHomeId) throw new Error("No hay un hogar activo");
+			await financeApi.removeMember(activeHomeId, memberId);
+			await refreshDetail();
+		},
+		[refreshDetail],
+	);
+
 	/** Reloads the home list and keeps the active home if the user still belongs. */
 	const refresh = useCallback<HomeContextValue["refresh"]>(async () => {
 		const listed = await financeApi.listHomes();
@@ -294,6 +305,7 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 		createHome,
 		joinHome,
 		leaveHome,
+		removeMember,
 		refresh,
 		syncNow,
 		createTransaction,

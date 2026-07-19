@@ -231,6 +231,10 @@ export const financeApi = {
     await apiFetch(`/api/homes/${homeId}`, { method: 'DELETE' });
   },
 
+  async removeMember(homeId: string, memberId: string): Promise<void> {
+    await apiFetch(`/api/homes/${homeId}/members/${memberId}`, { method: 'DELETE' });
+  },
+
   async listCategories(homeId: string, type?: CategoryType): Promise<Category[]> {
     const data = await apiFetch<{ categories: CategoryDTO[] }>('/api/categories', {
       query: { homeId, type },

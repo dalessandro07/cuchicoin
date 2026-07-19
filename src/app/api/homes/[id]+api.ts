@@ -1,3 +1,5 @@
+import { and, asc, eq, isNull } from "drizzle-orm";
+
 import { categories, homes, members, transactions } from "@/db/schema";
 import { db } from "@/db/server";
 import {
@@ -13,8 +15,8 @@ import {
   serializeMember,
 } from "@/lib/api-serialize";
 import { getBalance, listTransactions } from "@/lib/finance-server";
+import { promoteEarliestMember } from "@/lib/home-members";
 import { publishHomeEvent } from "@/lib/realtime";
-import { and, asc, eq, isNull } from "drizzle-orm";
 
 export const GET = handle(async (request, { id }) => {
   const user = await requireUser(request);
@@ -61,18 +63,16 @@ export const DELETE = handle(async (request, { id }) => {
   const otherAdmins = others.filter((m) => m.role === "admin");
 
   if (membership.role === "admin" && otherAdmins.length === 0) {
-    if (others.length > 0) {
-      throw new ApiError(
-        409,
-        "Promueve a otro miembro a administrador antes de salir",
-      );
+    if (others.length === 0) {
+      // Sole member & admin: delete the whole home and its data.
+      await db.delete(transactions).where(eq(transactions.homeId, id));
+      await db.delete(members).where(eq(members.homeId, id));
+      await db.delete(categories).where(eq(categories.homeId, id));
+      await db.delete(homes).where(eq(homes.id, id));
+      return json({ deleted: true });
     }
-    // Sole member & admin: delete the whole home and its data.
-    await db.delete(transactions).where(eq(transactions.homeId, id));
-    await db.delete(members).where(eq(members.homeId, id));
-    await db.delete(categories).where(eq(categories.homeId, id));
-    await db.delete(homes).where(eq(homes.id, id));
-    return json({ deleted: true });
+    // Last admin leaving: promote the earliest-joined remaining member.
+    await promoteEarliestMember(id, membership.id);
   }
 
   await db

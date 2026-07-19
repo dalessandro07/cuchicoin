@@ -21,13 +21,22 @@ import { useHome } from "@/hooks/use-home";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function SettingsScreen() {
-	const { currentHome, currentMember, members, leaveHome, clearHome, refresh } =
-		useHome();
+	const {
+		currentHome,
+		currentMember,
+		members,
+		leaveHome,
+		clearHome,
+		refresh,
+		removeMember,
+	} = useHome();
 	const { signOut } = useAuth();
 	const theme = useTheme();
 	const [leaving, setLeaving] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
+	const [removingId, setRemovingId] = useState<string | null>(null);
 	const isAdmin = currentMember?.role === "admin";
+	const othersCount = members.filter((m) => m.id !== currentMember?.id).length;
 
 	if (!currentHome) return null;
 
@@ -45,34 +54,49 @@ export default function SettingsScreen() {
 		router.replace("/(app)");
 	};
 
+	const onRemoveMember = async (memberId: string) => {
+		setRemovingId(memberId);
+		try {
+			await removeMember(memberId);
+		} catch (err) {
+			Alert.alert(
+				"Error",
+				err instanceof Error ? err.message : "No se pudo eliminar al miembro",
+			);
+		} finally {
+			setRemovingId(null);
+		}
+	};
+
+	const leaveMessage =
+		othersCount === 0
+			? "¿Estás seguro? Eres el único miembro: el hogar y sus movimientos se eliminarán."
+			: isAdmin
+				? "¿Estás seguro? Si eres el único administrador, se asignará automáticamente a otro miembro."
+				: "¿Estás seguro de que quieres salir de este hogar?";
+
 	const confirmLeave = () => {
-		Alert.alert(
-			"Salir del hogar",
-			"¿Estás seguro? Si eres el único administrador, el hogar y sus movimientos se eliminarán para todos.",
-			[
-				{ text: "Cancelar", style: "cancel" },
-				{
-					text: "Salir",
-					style: "destructive",
-					onPress: async () => {
-						setLeaving(true);
-						try {
-							await leaveHome();
-							router.replace("/(app)");
-						} catch (err) {
-							Alert.alert(
-								"Error",
-								err instanceof Error
-									? err.message
-									: "No se pudo salir del hogar",
-							);
-						} finally {
-							setLeaving(false);
-						}
-					},
+		Alert.alert("Salir del hogar", leaveMessage, [
+			{ text: "Cancelar", style: "cancel" },
+			{
+				text: "Salir",
+				style: "destructive",
+				onPress: async () => {
+					setLeaving(true);
+					try {
+						await leaveHome();
+						router.replace("/(app)");
+					} catch (err) {
+						Alert.alert(
+							"Error",
+							err instanceof Error ? err.message : "No se pudo salir del hogar",
+						);
+					} finally {
+						setLeaving(false);
+					}
 				},
-			],
-		);
+			},
+		]);
 	};
 
 	return (
@@ -112,6 +136,8 @@ export default function SettingsScreen() {
 						<MemberList
 							members={members}
 							currentMemberId={currentMember?.id ?? null}
+							canRemove={isAdmin && removingId === null}
+							onRemove={(member) => void onRemoveMember(member.id)}
 						/>
 					</View>
 
