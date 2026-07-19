@@ -1,6 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import {
+	Pressable,
+	RefreshControl,
+	ScrollView,
+	StyleSheet,
+	Text,
+	View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BalanceHeader } from "@/components/finance/balance-header";
@@ -15,11 +23,21 @@ import { useTheme } from "@/hooks/use-theme";
 import type { TransactionView } from "@/lib/db-types";
 
 export default function DashboardScreen() {
-	const { currentHome, balance, recentTransactions } = useHome();
+	const { currentHome, balance, recentTransactions, refresh } = useHome();
 	const theme = useTheme();
 	const { hidden } = useMoneyVisibility();
+	const [refreshing, setRefreshing] = useState(false);
 
 	if (!currentHome) return null;
+
+	const onRefresh = async () => {
+		setRefreshing(true);
+		try {
+			await refresh();
+		} finally {
+			setRefreshing(false);
+		}
+	};
 
 	const openNew = (type: "expense" | "income") =>
 		router.push({ pathname: "/(app)/transaction", params: { type } });
@@ -40,6 +58,15 @@ export default function DashboardScreen() {
 				<ScrollView
 					contentContainerStyle={styles.scroll}
 					showsVerticalScrollIndicator={false}
+					refreshControl={
+						<RefreshControl
+							refreshing={refreshing}
+							onRefresh={() => void onRefresh()}
+							tintColor={theme.primary}
+							colors={[theme.primary]}
+							progressBackgroundColor={theme.backgroundElement}
+						/>
+					}
 				>
 					<BalanceHeader homeName={currentHome.name} balance={balance} />
 
