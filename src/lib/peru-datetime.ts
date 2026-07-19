@@ -12,7 +12,7 @@ const TIME_RE = /^\d{2}:\d{2}$/;
 export type OccurredAtParts = {
 	/** Calendar date YYYY-MM-DD, or null/undefined if not provided. */
 	date?: string | null;
-	/** Local time HH:mm, or null/undefined if not provided. */
+	/** Local time HH:mm (24h), or null/undefined if not provided. */
 	time?: string | null;
 };
 
@@ -52,6 +52,65 @@ export function limaNowStrings(now = new Date()): {
 }
 
 /**
+ * Converts a time string to HH:mm (24h).
+ * Accepts "15:30", "3:30 PM", "03:30 p.m.", "12:00 AM", etc.
+ */
+export function normalizeTimeTo24h(
+	raw: string | null | undefined,
+): string | null {
+	if (raw == null) return null;
+	const s = raw.trim();
+	if (!s) return null;
+
+	const m = s.match(
+		/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(a\.?\s*m\.?|p\.?\s*m\.?|am|pm)?$/i,
+	);
+	if (!m) return null;
+
+	let hour = Number(m[1]);
+	const minute = Number(m[2]);
+	const merRaw = m[3]?.toLowerCase().replace(/[\s.]/g, "") ?? "";
+	const isAm = merRaw === "am";
+	const isPm = merRaw === "pm";
+
+	if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+	if (minute < 0 || minute > 59) return null;
+
+	if (isAm || isPm) {
+		if (hour < 1 || hour > 12) return null;
+		if (isAm) {
+			if (hour === 12) hour = 0;
+		} else if (hour !== 12) {
+			hour += 12;
+		}
+	} else if (hour < 0 || hour > 23) {
+		return null;
+	}
+
+	return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/**
+ * Finds a clock time in OCR text. Prefers matches that include AM/PM
+ * (common on Peruvian receipts / Yape / POS tickets).
+ */
+export function extractTimeFromOcrText(text: string): string | null {
+	if (!text) return null;
+
+	const withMeridian = [
+		...text.matchAll(
+			/\b(\d{1,2}):(\d{2})(?::\d{2})?\s*(a\.?\s*m\.?|p\.?\s*m\.?|am|pm)\b/gi,
+		),
+	];
+	for (const match of withMeridian) {
+		const normalized = normalizeTimeTo24h(match[0]);
+		if (normalized) return normalized;
+	}
+
+	return null;
+}
+
+/**
  * Builds a Date for a Lima local YYYY-MM-DD + HH:mm.
  * Invalid inputs return null.
  */
@@ -59,9 +118,10 @@ export function limaLocalToDate(
 	dateStr: string,
 	timeStr: string,
 ): Date | null {
-	if (!DATE_RE.test(dateStr) || !TIME_RE.test(timeStr)) return null;
+	const normalized = normalizeTimeTo24h(timeStr) ?? timeStr;
+	if (!DATE_RE.test(dateStr) || !TIME_RE.test(normalized)) return null;
 	const [y, m, d] = dateStr.split("-").map(Number);
-	const [hh, mm] = timeStr.split(":").map(Number);
+	const [hh, mm] = normalized.split(":").map(Number);
 	if (
 		!Number.isFinite(y) ||
 		!Number.isFinite(m) ||
@@ -99,7 +159,7 @@ export function resolveOccurredAt(
 	const rawDate = parts.date?.trim() || null;
 	const rawTime = parts.time?.trim() || null;
 	const dateStr = rawDate && DATE_RE.test(rawDate) ? rawDate : null;
-	const timeStr = rawTime && TIME_RE.test(rawTime) ? rawTime : null;
+	const timeStr = rawTime ? normalizeTimeTo24h(rawTime) : null;
 
 	if (!dateStr && !timeStr) {
 		return Math.floor(now.getTime() / 1000);

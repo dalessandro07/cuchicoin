@@ -21,6 +21,7 @@ import {
 import { generateId } from "@/lib/home-defaults";
 import {
   limaNowStrings,
+  normalizeTimeTo24h,
   resolveOccurredAt,
 } from "@/lib/peru-datetime";
 import { publishHomeEvent } from "@/lib/realtime";
@@ -42,13 +43,11 @@ const datePartSchema = z.preprocess(
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
 );
-const timePartSchema = z.preprocess(
-  (v) => (v === "" || v === undefined ? null : v),
-  z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-);
+const timePartSchema = z.preprocess((v) => {
+  if (v === "" || v === undefined || v === null) return null;
+  if (typeof v !== "string") return v;
+  return normalizeTimeTo24h(v);
+}, z.string().regex(/^\d{2}:\d{2}$/).nullable());
 
 const aiResultSchema = z.object({
   reply: z.string().min(1).max(500),
@@ -99,7 +98,7 @@ Reglas:
 - description: frase corta útil para el historial (máx 120 chars).
 - categoryId: DEBE ser un id de la lista cuyo type coincida con type.
 - date: YYYY-MM-DD en zona Perú. Si el usuario no indica fecha, usa null (se asume hoy). Si dice "ayer", "el lunes", "hace 3 días", etc., calcula la fecha absoluta respecto a hoy (${nowDate}).
-- time: HH:mm (24h). Si el usuario no indica hora, usa null. Si solo indica hora (p. ej. "a las 3 pm"), date=null y time="15:00" (hoy + esa hora).
+- time: HH:mm en 24h. Si el usuario no indica hora, usa null. Si dice AM/PM, conviértelo (3 pm → "15:00", 12 am → "00:00", 12:30 pm → "12:30"). Si solo indica hora, date=null y time en 24h (hoy + esa hora).
 - Si no indica fecha ni hora: date=null y time=null (se registra ahora).
 - reply: mensaje al usuario (confirmación o pregunta). Sin mencionar JSON. Si registraste con fecha/hora distinta a ahora, menciónala brevemente en la confirmación.
 - Si ready=true, transaction no puede ser null.
