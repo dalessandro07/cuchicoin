@@ -25,6 +25,8 @@ export default function DashboardScreen() {
 		router.push({ pathname: "/(app)/transaction", params: { type } });
 
 	const openScan = () => router.push("/(app)/scan-receipt");
+	const openAssistant = () =>
+		router.push("/(app)/assistant" as Parameters<typeof router.push>[0]);
 
 	const openEdit = (transaction: TransactionView) =>
 		router.push({
@@ -45,6 +47,7 @@ export default function DashboardScreen() {
 						onExpense={() => openNew("expense")}
 						onIncome={() => openNew("income")}
 						onScan={openScan}
+						onAssistant={openAssistant}
 					/>
 
 					<View style={styles.sectionHeader}>

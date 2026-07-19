@@ -8,12 +8,14 @@ export type QuickActionsProps = {
 	onExpense: () => void;
 	onIncome: () => void;
 	onScan?: () => void;
+	onAssistant?: () => void;
 };
 
 export function QuickActions({
 	onExpense,
 	onIncome,
 	onScan,
+	onAssistant,
 }: QuickActionsProps) {
 	const theme = useTheme();
 	const showScan = Platform.OS !== "web" && !!onScan;
@@ -67,6 +69,33 @@ export function QuickActions({
 					</Text>
 				</Pressable>
 			</View>
+
+			{onAssistant ? (
+				<Pressable
+					onPress={onAssistant}
+					accessibilityRole="button"
+					accessibilityLabel="Asistente de voz y texto"
+					style={({ pressed }) => [
+						styles.scanAction,
+						{
+							backgroundColor: theme.background,
+							borderColor: theme.border,
+							opacity: pressed ? 0.7 : 1,
+						},
+					]}
+				>
+					<View
+						style={[styles.iconWrap, { backgroundColor: `${theme.accent}1A` }]}
+					>
+						<Ionicons
+							name="chatbubbles-outline"
+							size={26}
+							color={theme.accent}
+						/>
+					</View>
+					<Text style={[styles.label, { color: theme.text }]}>Asistente</Text>
+				</Pressable>
+			) : null}
 
 			{showScan ? (
 				<Pressable

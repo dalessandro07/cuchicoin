@@ -4,7 +4,7 @@ import { ApiError, handle, json, readBody, requireUser } from "@/lib/api-guard";
 import { serializeHome, serializeMember } from "@/lib/api-serialize";
 import { seedDefaultCategories } from "@/lib/finance-server";
 import { generateId, generateInviteCode } from "@/lib/home-defaults";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 async function findAvailableInviteCode(maxAttempts = 12): Promise<string> {
   for (let i = 0; i < maxAttempts; i++) {
@@ -25,7 +25,7 @@ export const GET = handle(async (request) => {
     .select()
     .from(members)
     .innerJoin(homes, eq(members.homeId, homes.id))
-    .where(eq(members.userId, user.id))
+    .where(and(eq(members.userId, user.id), isNull(members.leftAt)))
     .orderBy(desc(members.joinedAt));
 
   const result = rows.map((row) => ({

@@ -38,6 +38,7 @@ export default function AppLayout() {
 				<Stack.Screen name="home" />
 				<Stack.Screen name="transaction" options={{ presentation: "modal" }} />
 				<Stack.Screen name="scan-receipt" options={{ presentation: "modal" }} />
+				<Stack.Screen name="assistant" options={{ presentation: "modal" }} />
 				<Stack.Screen name="categories" options={{ presentation: "modal" }} />
 			</Stack>
 		</HomeProvider>

@@ -1,4 +1,5 @@
 import { PrimaryButton } from "@/components/auth/primary-button";
+import { HomeListRow } from "@/components/home/home-list-row";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { useHome } from "@/hooks/use-home";
@@ -34,7 +35,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type Phase = "idle" | "ocr" | "ai" | "done" | "error";
+type Phase = "idle" | "pick-home" | "ocr" | "ai" | "done" | "error";
 
 export default function ScanReceiptModal() {
 	const theme = useTheme();
@@ -54,11 +55,12 @@ export default function ScanReceiptModal() {
 	);
 	const [phase, setPhase] = useState<Phase>("idle");
 	const [error, setError] = useState<string | null>(null);
+	const [selectingId, setSelectingId] = useState<string | null>(null);
 	const processedRef = useRef<string | null>(null);
 
 	const pickerAvailable = isImagePickerAvailable();
 	const scanReady = Platform.OS === "web" ? false : pickerAvailable;
-	const busy = phase === "ocr" || phase === "ai";
+	const busy = phase === "ocr" || phase === "ai" || selectingId !== null;
 
 	const sharedPath =
 		hasShareIntent && shareIntent.files?.[0]?.path
@@ -91,35 +93,39 @@ export default function ScanReceiptModal() {
 		});
 	};
 
-	const processImage = async (uri: string) => {
+	const processImage = async (
+		uri: string,
+		opts?: { skipHomeCheck?: boolean; categoriesOverride?: typeof categories },
+	) => {
 		if (!uri || processedRef.current === uri) return;
 		if (homeStatus === "loading") return;
 
 		setImageUri(uri);
 
-		let activeCategories = categories;
-		if (!currentHome) {
-			if (homes.length === 1) {
-				try {
-					await selectHome(homes[0].home.id);
-					const detail = await financeApi.getHomeDetail(homes[0].home.id);
-					activeCategories = detail.categories;
-				} catch {
-					Alert.alert("Error", "No se pudo abrir el hogar para escanear.");
-					return;
-				}
-			} else {
+		if (!opts?.skipHomeCheck && !currentHome) {
+			setPhase("pick-home");
+			setError(null);
+			return;
+		}
+
+		// Claim this URI immediately so concurrent effects cannot start a second OCR.
+		processedRef.current = uri;
+
+		let activeCategories = opts?.categoriesOverride ?? categories;
+		if (activeCategories.length === 0 && currentHome) {
+			try {
+				const detail = await financeApi.getHomeDetail(currentHome.id);
+				activeCategories = detail.categories;
+			} catch {
+				processedRef.current = null;
 				setPhase("error");
-				setError(
-					homes.length === 0
-						? "Crea o únete a un hogar antes de escanear una boleta."
-						: "Entra a un hogar antes de escanear una boleta.",
-				);
+				setError("No se pudieron cargar las categorías del hogar.");
 				return;
 			}
 		}
 
 		if (activeCategories.length === 0) {
+			processedRef.current = null;
 			setPhase("error");
 			setError(
 				"Aún no hay categorías en este hogar. Espera un momento e intenta de nuevo.",
@@ -128,6 +134,7 @@ export default function ScanReceiptModal() {
 		}
 
 		if (!isReceiptOcrSupported()) {
+			processedRef.current = null;
 			setPhase("error");
 			setError(
 				"El OCR no está disponible en este dispositivo. Usa un development build.",
@@ -135,7 +142,6 @@ export default function ScanReceiptModal() {
 			return;
 		}
 
-		processedRef.current = uri;
 		setError(null);
 		setPhase("ocr");
 
@@ -167,12 +173,43 @@ export default function ScanReceiptModal() {
 	};
 
 	const processKey =
-		pendingUri && isReady ? `${pendingUri}|${homeStatus}|${isReady}` : "";
+		pendingUri && isReady
+			? `${pendingUri}|${homeStatus}|${isReady}|${currentHome?.id ?? ""}`
+			: "";
 
 	useKeyedEffect(processKey, () => {
 		if (!pendingUri || !isReady || homeStatus === "loading") return;
+		if (!currentHome) {
+			setImageUri(pendingUri);
+			setPhase("pick-home");
+			return;
+		}
 		void processImage(pendingUri);
 	});
+
+	const onSelectHomeForScan = async (homeId: string) => {
+		const uri = imageUri || pendingUri;
+		if (!uri) return;
+		setSelectingId(homeId);
+		setError(null);
+		try {
+			await selectHome(homeId);
+			const detail = await financeApi.getHomeDetail(homeId);
+			processedRef.current = null;
+			await processImage(uri, {
+				skipHomeCheck: true,
+				categoriesOverride: detail.categories,
+			});
+		} catch (err) {
+			Alert.alert(
+				"Error",
+				err instanceof Error ? err.message : "No se pudo abrir el hogar",
+			);
+			setPhase("pick-home");
+		} finally {
+			setSelectingId(null);
+		}
+	};
 
 	const pickFromLibrary = async () => {
 		try {
@@ -206,8 +243,14 @@ export default function ScanReceiptModal() {
 		}
 	};
 
-	const statusLabel =
-		phase === "ocr"
+	const pickingHome = phase === "pick-home";
+	const hasHomes = homes.length > 0;
+
+	const statusLabel = pickingHome
+		? hasHomes
+			? "Elige el hogar donde registrarás esta boleta."
+			: "Crea o únete a un hogar para escanear esta boleta."
+		: phase === "ocr"
 			? "Leyendo texto con OCR…"
 			: phase === "ai"
 				? "Analizando la boleta…"
@@ -231,7 +274,7 @@ export default function ScanReceiptModal() {
 						<Ionicons name="close" size={26} color={theme.text} />
 					</Pressable>
 					<Text style={[styles.headerTitle, { color: theme.text }]}>
-						Escanear boleta
+						{pickingHome ? "Elegir hogar" : "Escanear boleta"}
 					</Text>
 					<View style={styles.headerSpacer} />
 				</View>
@@ -275,7 +318,9 @@ export default function ScanReceiptModal() {
 					</View>
 
 					<View style={styles.statusRow}>
-						{busy ? <ActivityIndicator color={theme.primary} /> : null}
+						{busy && !pickingHome ? (
+							<ActivityIndicator color={theme.primary} />
+						) : null}
 						<Text
 							style={[
 								styles.statusText,
@@ -288,46 +333,89 @@ export default function ScanReceiptModal() {
 						</Text>
 					</View>
 
-					{!scanReady ? (
-						<Text style={[styles.hint, { color: theme.danger }]}>
-							{Platform.OS === "web"
-								? "El escáner no está disponible en web."
-								: "Falta el módulo nativo de cámara/galería. Recompila con: npx expo run:android o eas build -p android --profile development."}
-						</Text>
-					) : null}
+					{pickingHome ? (
+						hasHomes ? (
+							<View style={styles.homeList}>
+								{homes.map(({ home, membership }) => (
+									<HomeListRow
+										key={home.id}
+										home={home}
+										membership={membership}
+										disabled={selectingId !== null}
+										onPress={() => void onSelectHomeForScan(home.id)}
+									/>
+								))}
+							</View>
+						) : (
+							<View style={styles.homeList}>
+								<PrimaryButton
+									title="Crear un hogar"
+									onPress={() => router.push("/(app)/create-home")}
+								/>
+								<Pressable
+									onPress={() => router.push("/(app)/join-home")}
+									accessibilityRole="button"
+									style={({ pressed }) => [
+										styles.secondaryBtn,
+										{
+											borderColor: theme.border,
+											backgroundColor: theme.backgroundElement,
+											opacity: pressed ? 0.85 : 1,
+										},
+									]}
+								>
+									<Text
+										style={[styles.secondaryBtnText, { color: theme.text }]}
+									>
+										Unirme con código
+									</Text>
+								</Pressable>
+							</View>
+						)
+					) : (
+						<>
+							{!scanReady ? (
+								<Text style={[styles.hint, { color: theme.danger }]}>
+									{Platform.OS === "web"
+										? "El escáner no está disponible en web."
+										: "Falta el módulo nativo de cámara/galería. Recompila con: npx expo run:android o eas build -p android --profile development."}
+								</Text>
+							) : null}
 
-					<PrimaryButton
-						title="Tomar foto"
-						onPress={takePhoto}
-						disabled={busy || !scanReady}
-					/>
-					<Pressable
-						onPress={pickFromLibrary}
-						disabled={busy || !scanReady}
-						accessibilityRole="button"
-						style={({ pressed }) => [
-							styles.secondaryBtn,
-							{
-								borderColor: theme.border,
-								backgroundColor: theme.backgroundElement,
-								opacity: busy || !scanReady ? 0.5 : pressed ? 0.85 : 1,
-							},
-						]}
-					>
-						<Text style={[styles.secondaryBtnText, { color: theme.text }]}>
-							Elegir de galería
-						</Text>
-					</Pressable>
-					{phase === "error" && imageUri ? (
-						<PrimaryButton
-							title="Reintentar"
-							onPress={() => {
-								processedRef.current = null;
-								void processImage(imageUri);
-							}}
-							disabled={busy}
-						/>
-					) : null}
+							<PrimaryButton
+								title="Tomar foto"
+								onPress={takePhoto}
+								disabled={busy || !scanReady}
+							/>
+							<Pressable
+								onPress={pickFromLibrary}
+								disabled={busy || !scanReady}
+								accessibilityRole="button"
+								style={({ pressed }) => [
+									styles.secondaryBtn,
+									{
+										borderColor: theme.border,
+										backgroundColor: theme.backgroundElement,
+										opacity: busy || !scanReady ? 0.5 : pressed ? 0.85 : 1,
+									},
+								]}
+							>
+								<Text style={[styles.secondaryBtnText, { color: theme.text }]}>
+									Elegir de galería
+								</Text>
+							</Pressable>
+							{phase === "error" && imageUri ? (
+								<PrimaryButton
+									title="Reintentar"
+									onPress={() => {
+										processedRef.current = null;
+										void processImage(imageUri);
+									}}
+									disabled={busy}
+								/>
+							) : null}
+						</>
+					)}
 				</ScrollView>
 			</SafeAreaView>
 		</ThemedView>
@@ -397,6 +485,9 @@ const styles = StyleSheet.create({
 	hint: {
 		fontSize: 13,
 		lineHeight: 18,
+	},
+	homeList: {
+		gap: Spacing.three,
 	},
 	secondaryBtn: {
 		borderRadius: Radius.pill,

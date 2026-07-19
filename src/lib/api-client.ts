@@ -325,4 +325,29 @@ export const financeApi = {
       throw err;
     }
   },
+
+  async chatAssistant(input: {
+    homeId: string;
+    messages: { role: 'user' | 'assistant'; content: string }[];
+  }): Promise<{
+    reply: string;
+    transaction: TransactionView | null;
+    audioBase64: string | null;
+    audioMime: string | null;
+  }> {
+    try {
+      return await apiFetch('/api/assistant', {
+        method: 'POST',
+        body: input,
+      });
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 404) {
+        throw new ApiClientError(
+          'El asistente aún no está disponible en el servidor. Despliega el API con npm run deploy:api.',
+          404,
+        );
+      }
+      throw err;
+    }
+  },
 };

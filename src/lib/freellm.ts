@@ -146,3 +146,68 @@ export function extractJsonObject(text: string): unknown {
     throw new ApiError(502, 'La IA no devolvió un JSON válido');
   }
 }
+
+export type FreellmSpeechResult = {
+  base64: string;
+  mime: string;
+};
+
+/**
+ * OpenAI-compatible TTS via FreeLLM (`POST /audio/speech`).
+ * Returns null when the gateway has no audio model / request fails —
+ * callers should fall back to on-device speech.
+ */
+export async function freellmSpeech(
+  text: string,
+  opts?: { model?: string; voice?: string },
+): Promise<FreellmSpeechResult | null> {
+  const apiKey = process.env.FREELLM_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const trimmed = text.trim().slice(0, 4096);
+  if (!trimmed) return null;
+
+  const base = (process.env.FREELLM_BASE_URL?.trim() || DEFAULT_BASE).replace(/\/$/, '');
+  const url = `${base}/audio/speech`;
+  const model =
+    opts?.model?.trim() ||
+    process.env.FREELLM_SPEECH_MODEL?.trim() ||
+    undefined;
+
+  const body: Record<string, unknown> = {
+    input: trimmed,
+    voice: opts?.voice?.trim() || 'alloy',
+  };
+  if (model) body.model = model;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    return null;
+  }
+
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength === 0) return null;
+
+  const mimePart = contentType.split(';')[0]?.trim();
+  const mime =
+    mimePart && mimePart.includes('audio/') ? mimePart : 'audio/mpeg';
+
+  const base64 = Buffer.from(buffer).toString('base64');
+  return { base64, mime };
+}

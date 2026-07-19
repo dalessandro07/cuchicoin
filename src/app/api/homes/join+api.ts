@@ -25,8 +25,30 @@ export const POST = handle(async (request) => {
     .from(members)
     .where(and(eq(members.userId, user.id), eq(members.homeId, home.id)))
     .limit(1);
+
   if (existing.length > 0) {
-    throw new ApiError(409, "Ya perteneces a este hogar");
+    const prior = existing[0];
+    if (prior.leftAt == null) {
+      throw new ApiError(409, "Ya perteneces a este hogar");
+    }
+
+    const [member] = await db
+      .update(members)
+      .set({
+        leftAt: null,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        joinedAt: new Date(),
+        role: "member",
+      })
+      .where(eq(members.id, prior.id))
+      .returning();
+
+    return json(
+      { home: serializeHome(home), membership: serializeMember(member) },
+      201,
+    );
   }
 
   const [member] = await db

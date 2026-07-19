@@ -77,6 +77,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           androidIntentFilters: ["image/*"],
         },
       ],
+      "expo-audio",
+      [
+        "expo-speech-recognition",
+        {
+          microphonePermission:
+            "KuchiCoin necesita el micrófono para dictar gastos e ingresos.",
+          speechRecognitionPermission:
+            "KuchiCoin necesita reconocimiento de voz para el asistente.",
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,

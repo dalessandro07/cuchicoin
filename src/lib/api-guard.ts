@@ -6,7 +6,7 @@
 import { members } from "@/db/schema";
 import { db } from "@/db/server";
 import { auth } from "@/lib/auth-server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 export type SessionUser = {
   id: string;
@@ -63,7 +63,13 @@ export async function requireHomeMember(userId: string, homeId: string) {
   const rows = await db
     .select()
     .from(members)
-    .where(and(eq(members.userId, userId), eq(members.homeId, homeId)))
+    .where(
+      and(
+        eq(members.userId, userId),
+        eq(members.homeId, homeId),
+        isNull(members.leftAt),
+      ),
+    )
     .limit(1);
   const member = rows[0];
   if (!member) {
