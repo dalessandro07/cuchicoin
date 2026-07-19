@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
 	Alert,
 	Pressable,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -20,14 +21,24 @@ import { useHome } from "@/hooks/use-home";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function SettingsScreen() {
-	const { currentHome, currentMember, members, leaveHome, clearHome } =
+	const { currentHome, currentMember, members, leaveHome, clearHome, refresh } =
 		useHome();
 	const { signOut } = useAuth();
 	const theme = useTheme();
 	const [leaving, setLeaving] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
 	const isAdmin = currentMember?.role === "admin";
 
 	if (!currentHome) return null;
+
+	const onRefresh = async () => {
+		setRefreshing(true);
+		try {
+			await refresh();
+		} finally {
+			setRefreshing(false);
+		}
+	};
 
 	const switchHome = () => {
 		clearHome();
@@ -70,6 +81,15 @@ export default function SettingsScreen() {
 				<ScrollView
 					contentContainerStyle={styles.scroll}
 					showsVerticalScrollIndicator={false}
+					refreshControl={
+						<RefreshControl
+							refreshing={refreshing}
+							onRefresh={() => void onRefresh()}
+							tintColor={theme.primary}
+							colors={[theme.primary]}
+							progressBackgroundColor={theme.backgroundElement}
+						/>
+					}
 				>
 					<View style={styles.header}>
 						<Text

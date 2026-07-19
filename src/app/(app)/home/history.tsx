@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import {
 	ActivityIndicator,
 	Pressable,
+	RefreshControl,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -235,12 +236,22 @@ function MonthList({
 }
 
 export default function HistoryScreen() {
-	const { currentHome, members, dataVersion } = useHome();
+	const { currentHome, members, dataVersion, refresh } = useHome();
 	const { hidden } = useMoneyVisibility();
 	const theme = useTheme();
 	const [memberId, setMemberId] = useState<string | null>(null);
+	const [refreshing, setRefreshing] = useState(false);
 
 	if (!currentHome) return null;
+
+	const onRefresh = async () => {
+		setRefreshing(true);
+		try {
+			await refresh();
+		} finally {
+			setRefreshing(false);
+		}
+	};
 
 	return (
 		<ThemedView style={styles.container}>
@@ -258,6 +269,15 @@ export default function HistoryScreen() {
 					contentContainerStyle={styles.scroll}
 					showsVerticalScrollIndicator={false}
 					keyboardShouldPersistTaps="handled"
+					refreshControl={
+						<RefreshControl
+							refreshing={refreshing}
+							onRefresh={() => void onRefresh()}
+							tintColor={theme.primary}
+							colors={[theme.primary]}
+							progressBackgroundColor={theme.backgroundElement}
+						/>
+					}
 				>
 					<MonthList
 						key={`${currentHome.id}:${dataVersion}:${memberId ?? "all"}`}
