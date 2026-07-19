@@ -76,12 +76,34 @@ async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
-      (data && typeof data === 'object' && 'error' in data && (data.error as string)) ||
-      'Ocurrió un error inesperado';
-    throw new ApiClientError(message, response.status);
+    throw new ApiClientError(extractApiErrorMessage(data, response.status), response.status);
   }
   return data as T;
+}
+
+function extractApiErrorMessage(data: unknown, status: number): string {
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    const err = obj.error;
+    if (typeof err === 'string' && err.trim()) return err.trim();
+    if (err && typeof err === 'object') {
+      const nested = err as Record<string, unknown>;
+      if (typeof nested.message === 'string' && nested.message.trim()) {
+        return nested.message.trim();
+      }
+    }
+    if (typeof obj.message === 'string' && obj.message.trim()) {
+      return obj.message.trim();
+    }
+  }
+  if (status === 401) return 'Sesión no válida o expirada';
+  if (status === 403) return 'No tienes permiso para esta acción';
+  if (status === 404) return 'No se encontró el recurso en el servidor';
+  if (status === 413) return 'La imagen es demasiado grande';
+  if (status === 422) return 'El servidor rechazó la solicitud (datos inválidos)';
+  if (status >= 500) return `Error del servidor (${status})`;
+  if (status > 0) return `Error de la solicitud (${status})`;
+  return 'Ocurrió un error inesperado';
 }
 
 // --- DTO mappers (numeric unix seconds -> Date, ints -> booleans) -----------
@@ -148,6 +170,19 @@ export type CreateCategoryInput = {
 };
 
 export type UpdateCategoryInput = { name?: string; icon?: string; color?: string };
+
+export type AnalyzeReceiptCategory = {
+  id: string;
+  name: string;
+  type: CategoryType;
+};
+
+export type AnalyzeReceiptResult = {
+  type: CategoryType;
+  amountCents: number;
+  description: string;
+  categoryId: string | null;
+};
 
 export const financeApi = {
   async listHomes(): Promise<{ home: Home; membership: Member }[]> {
@@ -268,5 +303,28 @@ export const financeApi = {
       query: { homeId, month },
     });
     return data.summary;
+  },
+
+  async analyzeReceipt(input: {
+    imageBase64?: string;
+    mimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
+    categories: AnalyzeReceiptCategory[];
+    ocrText?: string;
+  }): Promise<AnalyzeReceiptResult> {
+    try {
+      const data = await apiFetch<{ analysis: AnalyzeReceiptResult }>('/api/scan-receipt', {
+        method: 'POST',
+        body: input,
+      });
+      return data.analysis;
+    } catch (err) {
+      if (err instanceof ApiClientError && err.status === 404) {
+        throw new ApiClientError(
+          'El escáner aún no está disponible en el servidor. Despliega el API con npm run deploy:api.',
+          404,
+        );
+      }
+      throw err;
+    }
   },
 };

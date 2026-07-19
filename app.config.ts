@@ -21,6 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     userInterfaceStyle: "automatic",
     ios: {
       icon: brandLogo,
+      deploymentTarget: "16.4",
     },
     android: {
       adaptiveIcon: {
@@ -42,6 +43,38 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           backgroundColor: "#000000",
           image: brandLogo,
           imageWidth: 220,
+        },
+      ],
+      [
+        "expo-image-picker",
+        {
+          cameraPermission:
+            "KuchiCoin necesita la cámara para escanear boletas y capturas.",
+          photosPermission:
+            "KuchiCoin necesita acceso a tus fotos para escanear boletas.",
+        },
+      ],
+      [
+        "expo-mlkit-ocr",
+        {
+          iosEngine: "auto",
+        },
+      ],
+      [
+        "expo-build-properties",
+        {
+          ios: {
+            deploymentTarget: "16.4",
+          },
+        },
+      ],
+      [
+        "expo-share-intent",
+        {
+          iosActivationRules: {
+            NSExtensionActivationSupportsImageWithMaxCount: 1,
+          },
+          androidIntentFilters: ["image/*"],
         },
       ],
     ],

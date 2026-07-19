@@ -7,44 +7,47 @@
  *   authenticated      -> (app) renders, (auth) redirects to /
  */
 
-import * as SplashScreen from 'expo-splash-screen';
-import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import type { ReactNode } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import type { ReactNode } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { AuthProvider } from '@/context/auth-context';
-import { Colors } from '@/constants/theme';
+import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { Colors } from "@/constants/theme";
+import { AuthProvider } from "@/context/auth-context";
+import { OptionalShareIntentProvider } from "@/lib/share-intent";
 
 SplashScreen.preventAutoHideAsync();
 
 const theme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: Colors.background,
-    card: Colors.background,
-    text: Colors.text,
-    primary: Colors.primary,
-  },
+	...DefaultTheme,
+	colors: {
+		...DefaultTheme.colors,
+		background: Colors.background,
+		card: Colors.background,
+		text: Colors.text,
+		primary: Colors.primary,
+	},
 };
 
 function ThemedShell({ children }: { children: ReactNode }) {
-  return <ThemeProvider value={theme}>{children}</ThemeProvider>;
+	return <ThemeProvider value={theme}>{children}</ThemeProvider>;
 }
 
 export default function RootLayout() {
-  return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <ThemedShell>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(app)" />
-          </Stack>
-        </ThemedShell>
-        <AnimatedSplashOverlay />
-      </AuthProvider>
-    </SafeAreaProvider>
-  );
+	return (
+		<OptionalShareIntentProvider>
+			<SafeAreaProvider>
+				<AuthProvider>
+					<ThemedShell>
+						<Stack screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="(auth)" />
+							<Stack.Screen name="(app)" />
+						</Stack>
+						<AnimatedSplashOverlay />
+					</ThemedShell>
+				</AuthProvider>
+			</SafeAreaProvider>
+		</OptionalShareIntentProvider>
+	);
 }

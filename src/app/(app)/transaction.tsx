@@ -183,7 +183,7 @@ function TransactionForm({ initial }: { initial: FormInitial }) {
 						value={amountText}
 						onChangeText={setAmountText}
 						tint={tint}
-						autoFocus={!isEdit}
+						autoFocus={!isEdit && !amountText}
 					/>
 					<Text style={[styles.preview, { color: theme.textSecondary }]}>
 						{formatSoles(parseSolesToCents(amountText) ?? 0)}
@@ -267,17 +267,34 @@ function EditLoader({ id }: { id: string }) {
 }
 
 export default function TransactionModal() {
-	const params = useLocalSearchParams<{ id?: string; type?: string }>();
+	const params = useLocalSearchParams<{
+		id?: string;
+		type?: string;
+		amount?: string;
+		description?: string;
+		categoryId?: string;
+		fromScan?: string;
+	}>();
 	const theme = useTheme();
 	const id = typeof params.id === "string" ? params.id : undefined;
 	const paramType: CategoryType =
 		params.type === "income" ? "income" : "expense";
+	const fromScan = params.fromScan === "1";
+	const amountText = typeof params.amount === "string" ? params.amount : "";
+	const description =
+		typeof params.description === "string" ? params.description : "";
+	const categoryId =
+		typeof params.categoryId === "string" && params.categoryId.length > 0
+			? params.categoryId
+			: null;
 
 	const title = id
 		? "Editar movimiento"
-		: paramType === "income"
-			? "Nuevo ingreso"
-			: "Nuevo gasto";
+		: fromScan
+			? "Confirmar escaneo"
+			: paramType === "income"
+				? "Nuevo ingreso"
+				: "Nuevo gasto";
 
 	return (
 		<ThemedView style={styles.container}>
@@ -303,9 +320,9 @@ export default function TransactionModal() {
 					<TransactionForm
 						initial={{
 							type: paramType,
-							amountText: "",
-							categoryId: null,
-							description: "",
+							amountText,
+							categoryId,
+							description,
 						}}
 					/>
 				)}

@@ -29,12 +29,15 @@ Opcional: si las vars viven en EAS Environment Variables, sincroniza localmente 
 
 Configúralas en EAS Environment Variables para el entorno `production` (visibilidad plaintext o sensitive; no uses secret visibility para Hosting). Van con `eas deploy --environment production` — **no** llevan prefijo `EXPO_PUBLIC_`:
 
-| Variable             | Uso                             |
-| -------------------- | ------------------------------- |
-| `TURSO_URL`          | URL libsql de Turso             |
-| `TURSO_AUTH_TOKEN`   | Token Turso                     |
-| `BETTER_AUTH_URL`    | Misma URL pública HTTPS del API |
-| `BETTER_AUTH_SECRET` | Secreto largo aleatorio         |
+| Variable               | Uso                                          |
+| ---------------------- | -------------------------------------------- |
+| `TURSO_URL`            | URL libsql de Turso                          |
+| `TURSO_AUTH_TOKEN`     | Token Turso                                  |
+| `BETTER_AUTH_URL`      | Misma URL pública HTTPS del API              |
+| `BETTER_AUTH_SECRET`   | Secreto largo aleatorio                      |
+| `FREELLM_API_KEY`      | Clave FreeLLM (escáner de boletas / visión)  |
+| `FREELLM_BASE_URL`     | `https://freellmapi.alessandrorios.com/v1`   |
+| `FREELLM_VISION_MODEL` | Opcional; default `gemini-2.5-flash`         |
 
 **No** uses `EXPO_PUBLIC_TURSO_`*: esas variables irían al bundle del APK.
 
