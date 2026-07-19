@@ -1,6 +1,5 @@
 import { useMountEffect } from "@/hooks/use-mount-effect";
-import { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, type DimensionValue } from "react-native";
 import Animated, {
 	cancelAnimation,
 	Easing,
@@ -18,13 +17,27 @@ type ScanGleamOverlayProps = {
 };
 
 const BEAM_WIDTH = 72;
-const SPARKLES = [
+
+const SPARKLES: ReadonlyArray<{
+	top: DimensionValue;
+	left: DimensionValue;
+	size: number;
+	delay: number;
+}> = [
 	{ top: "18%", left: "22%", size: 5, delay: 0 },
 	{ top: "38%", left: "68%", size: 4, delay: 220 },
 	{ top: "58%", left: "34%", size: 6, delay: 480 },
 	{ top: "72%", left: "78%", size: 4, delay: 700 },
 	{ top: "28%", left: "52%", size: 3, delay: 160 },
-] as const;
+];
+
+const fill = {
+	position: "absolute" as const,
+	top: 0,
+	right: 0,
+	bottom: 0,
+	left: 0,
+};
 
 function Sparkle({
 	top,
@@ -32,8 +45,8 @@ function Sparkle({
 	size,
 	delay,
 }: {
-	top: string;
-	left: string;
+	top: DimensionValue;
+	left: DimensionValue;
 	size: number;
 	delay: number;
 }) {
@@ -54,7 +67,7 @@ function Sparkle({
 		return () => cancelAnimation(pulse);
 	});
 
-	const style = useAnimatedStyle(() => ({
+	const animStyle = useAnimatedStyle(() => ({
 		opacity: pulse.value,
 		transform: [{ scale: interpolate(pulse.value, [0, 1], [0.4, 1.25]) }],
 	}));
@@ -71,7 +84,7 @@ function Sparkle({
 					height: size,
 					borderRadius: size / 2,
 				},
-				style,
+				animStyle,
 			]}
 		/>
 	);
@@ -104,7 +117,7 @@ function ScanGleamInner() {
 	const beamStyle = useAnimatedStyle(() => {
 		const x = interpolate(sweep.value, [0, 1], [-BEAM_WIDTH * 2, 420]);
 		return {
-			transform: [{ translateX: x }, { skewX: "-18deg" }],
+			transform: [{ translateX: x }, { skewX: "-18deg" as const }],
 			opacity: interpolate(
 				sweep.value,
 				[0, 0.12, 0.5, 0.88, 1],
@@ -117,8 +130,6 @@ function ScanGleamInner() {
 		opacity: interpolate(glow.value, [0, 1], [0.08, 0.28]),
 	}));
 
-	const sparkles = useMemo(() => SPARKLES, []);
-
 	return (
 		<View pointerEvents="none" style={styles.overlay}>
 			<Animated.View style={[styles.brightness, glowStyle]} />
@@ -126,9 +137,9 @@ function ScanGleamInner() {
 				<View style={styles.beamCore} />
 				<View style={styles.beamSoft} />
 			</Animated.View>
-			{sparkles.map((s) => (
+			{SPARKLES.map((s) => (
 				<Sparkle
-					key={`${s.top}-${s.left}`}
+					key={`${String(s.top)}-${String(s.left)}`}
 					top={s.top}
 					left={s.left}
 					size={s.size}
@@ -147,11 +158,11 @@ export function ScanGleamOverlay({ active }: ScanGleamOverlayProps) {
 
 const styles = StyleSheet.create({
 	overlay: {
-		...StyleSheet.absoluteFill,
+		...fill,
 		overflow: "hidden",
 	},
 	brightness: {
-		...StyleSheet.absoluteFill,
+		...fill,
 		backgroundColor: "#FFF8F0",
 	},
 	beam: {
@@ -167,7 +178,7 @@ const styles = StyleSheet.create({
 		backgroundColor: "rgba(255, 248, 240, 0.92)",
 	},
 	beamSoft: {
-		...StyleSheet.absoluteFill,
+		...fill,
 		backgroundColor: "rgba(228, 162, 18, 0.35)",
 	},
 	sparkle: {
