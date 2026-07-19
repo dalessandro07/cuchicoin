@@ -306,10 +306,8 @@ export const financeApi = {
   },
 
   async analyzeReceipt(input: {
-    imageBase64?: string;
-    mimeType?: 'image/jpeg' | 'image/png' | 'image/webp';
+    ocrText: string;
     categories: AnalyzeReceiptCategory[];
-    ocrText?: string;
   }): Promise<AnalyzeReceiptResult> {
     try {
       const data = await apiFetch<{ analysis: AnalyzeReceiptResult }>('/api/scan-receipt', {

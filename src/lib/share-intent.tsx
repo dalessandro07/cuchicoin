@@ -8,12 +8,14 @@ import { createContext, type ReactNode, useContext } from "react";
 type ShareFile = { path?: string; mimeType?: string; fileName?: string };
 
 export type ShareIntentState = {
+	isReady: boolean;
 	hasShareIntent: boolean;
 	shareIntent: { files?: ShareFile[] | null };
 	resetShareIntent: (clearNativeModule?: boolean) => void;
 };
 
 const EMPTY: ShareIntentState = {
+	isReady: true,
 	hasShareIntent: false,
 	shareIntent: { files: null },
 	resetShareIntent: () => {},
@@ -21,9 +23,16 @@ const EMPTY: ShareIntentState = {
 
 const ShareContext = createContext<ShareIntentState>(EMPTY);
 
+type NativeShareIntentState = {
+	isReady: boolean;
+	hasShareIntent: boolean;
+	shareIntent: { files?: ShareFile[] | null };
+	resetShareIntent: (clearNativeModule?: boolean) => void;
+};
+
 type NativeMod = {
 	ShareIntentProvider: (props: { children: ReactNode }) => ReactNode;
-	useShareIntentContext: () => ShareIntentState;
+	useShareIntentContext: () => NativeShareIntentState;
 };
 
 let nativeMod: NativeMod | null | undefined;
@@ -43,10 +52,16 @@ function NativeShareBridge({
 	useNative,
 	children,
 }: {
-	useNative: () => ShareIntentState;
+	useNative: () => NativeShareIntentState;
 	children: ReactNode;
 }) {
-	const value = useNative();
+	const native = useNative();
+	const value: ShareIntentState = {
+		isReady: native.isReady,
+		hasShareIntent: native.hasShareIntent,
+		shareIntent: native.shareIntent,
+		resetShareIntent: native.resetShareIntent,
+	};
 	return (
 		<ShareContext.Provider value={value}>{children}</ShareContext.Provider>
 	);

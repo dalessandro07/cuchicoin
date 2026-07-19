@@ -8,9 +8,6 @@ import {
   requireUser,
 } from '@/lib/api-guard';
 import { extractJsonObject, freellmChatCompletion } from '@/lib/freellm';
-import { detectMimeFromBase64, normalizeMime } from '@/lib/image-mime';
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB decoded
 
 const categoryInputSchema = z.object({
   id: z.string().min(1),
@@ -18,21 +15,10 @@ const categoryInputSchema = z.object({
   type: z.enum(['expense', 'income']),
 });
 
-const requestSchema = z
-  .object({
-    imageBase64: z.string().trim().max(7_000_000).optional(),
-    mimeType: z
-      .enum(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
-      .optional()
-      .default('image/jpeg'),
-    categories: z.array(categoryInputSchema).min(1).max(80),
-    ocrText: z.string().trim().max(12_000).optional(),
-  })
-  .refine(
-    (data) =>
-      Boolean(data.imageBase64?.trim()) || Boolean(data.ocrText?.trim()),
-    { message: 'Se necesita una imagen o texto OCR para analizar' },
-  );
+const requestSchema = z.object({
+  categories: z.array(categoryInputSchema).min(1).max(80),
+  ocrText: z.string().trim().min(1).max(12_000),
+});
 
 const aiResultSchema = z.object({
   type: z.enum(['expense', 'income']),
@@ -58,14 +44,6 @@ function fallbackCategoryId(
   );
   if (others) return others.id;
   return categories.find((c) => c.type === type)?.id ?? null;
-}
-
-function stripDataUrlPrefix(raw: string): { base64: string; mime?: string } {
-  const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
-  if (match) {
-    return { mime: match[1], base64: match[2] };
-  }
-  return { base64: raw.replace(/\s/g, '') };
 }
 
 function buildCatalog(categories: z.infer<typeof categoryInputSchema>[]) {
@@ -128,86 +106,27 @@ export const POST = handle(async (request) => {
   const { categories, ocrText } = parsed.data;
   const catalog = buildCatalog(categories);
   const rules = buildJsonRules(catalog);
-
-  const imageRaw = parsed.data.imageBase64?.trim() ?? '';
-  const ocrRaw = ocrText?.trim() ?? '';
-
-  // Text-only path (OCR fallback from the client).
-  if (ocrRaw && !imageRaw) {
-    const textModel = process.env.FREELLM_TEXT_MODEL?.trim();
-    const content = await freellmChatCompletion(
-      [
-        {
-          role: 'user',
-          content: `${rules}
-
-Analiza este texto OCR de una boleta/captura y responde solo con el JSON indicado.
-
-Texto OCR:
-${ocrRaw.slice(0, 10_000)}`,
-        },
-      ],
-      {
-        // Omit model when unset/"auto" so FreeLLM auto-routes (no catalog id "auto").
-        ...(textModel && textModel !== 'auto' ? { model: textModel } : {}),
-        temperature: 0.1,
-      },
-    );
-    return json({ analysis: parseAnalysis(content, categories), mode: 'ocr' });
-  }
-
-  const stripped = stripDataUrlPrefix(imageRaw);
-  const imageBase64 = stripped.base64;
-  const claimedMime = normalizeMime(stripped.mime ?? parsed.data.mimeType ?? 'image/jpeg');
-  const detectedMime = detectMimeFromBase64(imageBase64);
-
-  if (!detectedMime) {
-    throw new ApiError(
-      400,
-      'La imagen no es un JPEG/PNG/WebP válido (magic bytes no reconocidos)',
-    );
-  }
-
-  const mime = detectedMime;
-  if (claimedMime !== detectedMime) {
-    console.warn(
-      `[scan-receipt] mime mismatch: claimed=${claimedMime} detected=${detectedMime}`,
-    );
-  }
-
-  const approxBytes = Math.floor((imageBase64.length * 3) / 4);
-  if (approxBytes > MAX_IMAGE_BYTES) {
-    throw new ApiError(400, 'La imagen supera el límite de 5 MB');
-  }
-  if (approxBytes < 100) {
-    throw new ApiError(400, 'La imagen parece vacía o corrupta');
-  }
-
-  const textParts = [
-    `${rules}
-
-Analiza la imagen adjunta y responde solo con el JSON indicado.`,
-  ];
-  if (ocrText?.trim()) {
-    textParts.push(`Texto OCR opcional (pista):\n${ocrText.trim().slice(0, 4000)}`);
-  }
-
-  const dataUrl = `data:${mime};base64,${imageBase64}`;
-  const visionModel =
-    process.env.FREELLM_VISION_MODEL?.trim() || 'gpt-4o';
+  const ocrRaw = ocrText.trim();
+  const textModel = process.env.FREELLM_TEXT_MODEL?.trim();
 
   const content = await freellmChatCompletion(
     [
       {
         role: 'user',
-        content: [
-          { type: 'text', text: textParts.join('\n\n') },
-          { type: 'image_url', image_url: { url: dataUrl } },
-        ],
+        content: `${rules}
+
+Analiza este texto OCR de una boleta/captura y responde solo con el JSON indicado.
+
+Texto OCR:
+${ocrRaw.slice(0, 10_000)}`,
       },
     ],
-    { model: visionModel },
+    {
+      // Omit model when unset/"auto" so FreeLLM auto-routes (no catalog id "auto").
+      ...(textModel && textModel !== 'auto' ? { model: textModel } : {}),
+      temperature: 0.1,
+    },
   );
 
-  return json({ analysis: parseAnalysis(content, categories), mode: 'vision' });
+  return json({ analysis: parseAnalysis(content, categories), mode: 'ocr' });
 });

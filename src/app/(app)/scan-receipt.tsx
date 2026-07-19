@@ -5,7 +5,6 @@ import { useHome } from "@/hooks/use-home";
 import { useKeyedEffect } from "@/hooks/use-mount-effect";
 import { useTheme } from "@/hooks/use-theme";
 import { ApiClientError, financeApi } from "@/lib/api-client";
-import { prepareReceiptImage } from "@/lib/image-base64";
 import {
 	ImagePickerUnavailableError,
 	isImagePickerAvailable,
@@ -35,28 +34,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type Phase = "idle" | "reading" | "ai" | "ocr" | "done" | "error";
-
-function shouldRetryWithOcr(err: unknown): boolean {
-	if (!(err instanceof ApiClientError) && !(err instanceof Error)) return false;
-	const msg = err.message.toLowerCase();
-	// Vision / FreeLLM rejection → try OCR text path (not JSON parse after a good vision reply).
-	if (
-		msg.includes("invalid input") ||
-		msg.includes("invalid request") ||
-		msg.includes("no_vision_model") ||
-		msg.includes("visión") ||
-		msg.includes("vision") ||
-		msg.includes("image") ||
-		msg.includes("imagen") ||
-		msg.includes("magic bytes")
-	) {
-		return true;
-	}
-	return (
-		err instanceof ApiClientError && (err.status === 400 || err.status === 422)
-	);
-}
+type Phase = "idle" | "ocr" | "ai" | "done" | "error";
 
 export default function ScanReceiptModal() {
 	const theme = useTheme();
@@ -68,7 +46,7 @@ export default function ScanReceiptModal() {
 		selectHome,
 	} = useHome();
 	const params = useLocalSearchParams<{ imageUri?: string }>();
-	const { hasShareIntent, shareIntent, resetShareIntent } =
+	const { isReady, hasShareIntent, shareIntent, resetShareIntent } =
 		useOptionalShareIntent();
 
 	const [imageUri, setImageUri] = useState<string | null>(
@@ -80,7 +58,18 @@ export default function ScanReceiptModal() {
 
 	const pickerAvailable = isImagePickerAvailable();
 	const scanReady = Platform.OS === "web" ? false : pickerAvailable;
-	const busy = phase === "reading" || phase === "ai" || phase === "ocr";
+	const busy = phase === "ocr" || phase === "ai";
+
+	const sharedPath =
+		hasShareIntent && shareIntent.files?.[0]?.path
+			? shareIntent.files[0].path
+			: "";
+	const pendingUri =
+		sharedPath || (typeof params.imageUri === "string" ? params.imageUri : "");
+
+	useKeyedEffect(sharedPath, () => {
+		if (sharedPath) setImageUri(sharedPath);
+	});
 
 	const goToTransaction = (analysis: {
 		type: "expense" | "income";
@@ -102,28 +91,11 @@ export default function ScanReceiptModal() {
 		});
 	};
 
-	const analyzeWithOcrFallback = async (
-		uri: string,
-		categoryPayload: { id: string; name: string; type: "expense" | "income" }[],
-		visionError: unknown,
-	) => {
-		if (!isReceiptOcrSupported()) {
-			throw visionError instanceof Error
-				? visionError
-				: new Error("No se pudo analizar la boleta");
-		}
-		setPhase("ocr");
-		const ocrText = await recognizeReceiptText(uri);
-		setPhase("ai");
-		return financeApi.analyzeReceipt({
-			ocrText,
-			categories: categoryPayload,
-		});
-	};
-
 	const processImage = async (uri: string) => {
 		if (!uri || processedRef.current === uri) return;
 		if (homeStatus === "loading") return;
+
+		setImageUri(uri);
 
 		let activeCategories = categories;
 		if (!currentHome) {
@@ -137,10 +109,11 @@ export default function ScanReceiptModal() {
 					return;
 				}
 			} else {
-				Alert.alert(
-					"Selecciona un hogar",
-					"Entra a un hogar antes de escanear una boleta.",
-					[{ text: "OK", onPress: () => router.replace("/(app)") }],
+				setPhase("error");
+				setError(
+					homes.length === 0
+						? "Crea o únete a un hogar antes de escanear una boleta."
+						: "Entra a un hogar antes de escanear una boleta.",
 				);
 				return;
 			}
@@ -154,10 +127,17 @@ export default function ScanReceiptModal() {
 			return;
 		}
 
+		if (!isReceiptOcrSupported()) {
+			setPhase("error");
+			setError(
+				"El OCR no está disponible en este dispositivo. Usa un development build.",
+			);
+			return;
+		}
+
 		processedRef.current = uri;
-		setImageUri(uri);
 		setError(null);
-		setPhase("reading");
+		setPhase("ocr");
 
 		const categoryPayload = activeCategories.map((c) => ({
 			id: c.id,
@@ -166,24 +146,13 @@ export default function ScanReceiptModal() {
 		}));
 
 		try {
-			const { base64, mimeType } = await prepareReceiptImage(uri);
+			const ocrText = await recognizeReceiptText(uri);
 			setPhase("ai");
-			try {
-				const analysis = await financeApi.analyzeReceipt({
-					imageBase64: base64,
-					mimeType,
-					categories: categoryPayload,
-				});
-				goToTransaction(analysis);
-			} catch (visionErr) {
-				if (!shouldRetryWithOcr(visionErr)) throw visionErr;
-				const analysis = await analyzeWithOcrFallback(
-					uri,
-					categoryPayload,
-					visionErr,
-				);
-				goToTransaction(analysis);
-			}
+			const analysis = await financeApi.analyzeReceipt({
+				ocrText,
+				categories: categoryPayload,
+			});
+			goToTransaction(analysis);
 		} catch (err) {
 			processedRef.current = null;
 			const message =
@@ -197,16 +166,11 @@ export default function ScanReceiptModal() {
 		}
 	};
 
-	const sharedPath =
-		hasShareIntent && shareIntent.files?.[0]?.path
-			? shareIntent.files[0].path
-			: "";
-	const pendingUri =
-		sharedPath || (typeof params.imageUri === "string" ? params.imageUri : "");
-	const processKey = pendingUri ? `${pendingUri}|${homeStatus}` : "";
+	const processKey =
+		pendingUri && isReady ? `${pendingUri}|${homeStatus}|${isReady}` : "";
 
 	useKeyedEffect(processKey, () => {
-		if (!pendingUri || homeStatus === "loading") return;
+		if (!pendingUri || !isReady || homeStatus === "loading") return;
 		void processImage(pendingUri);
 	});
 
@@ -243,15 +207,13 @@ export default function ScanReceiptModal() {
 	};
 
 	const statusLabel =
-		phase === "reading"
-			? "Preparando la imagen…"
-			: phase === "ocr"
-				? "La visión falló; leyendo texto con OCR…"
-				: phase === "ai"
-					? "Analizando la boleta con IA…"
-					: phase === "error"
-						? error
-						: "Toma una foto o elige una captura de boleta, ticket o transferencia.";
+		phase === "ocr"
+			? "Leyendo texto con OCR…"
+			: phase === "ai"
+				? "Analizando la boleta…"
+				: phase === "error"
+					? error
+					: "Toma una foto o elige una captura de boleta, ticket o transferencia.";
 
 	return (
 		<ThemedView style={styles.container}>

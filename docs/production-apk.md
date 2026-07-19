@@ -35,9 +35,9 @@ Configúralas en EAS Environment Variables para el entorno `production` (visibil
 | `TURSO_AUTH_TOKEN`     | Token Turso                                  |
 | `BETTER_AUTH_URL`      | Misma URL pública HTTPS del API              |
 | `BETTER_AUTH_SECRET`   | Secreto largo aleatorio                      |
-| `FREELLM_API_KEY`      | Clave FreeLLM (escáner de boletas / visión)  |
+| `FREELLM_API_KEY`      | Clave FreeLLM (análisis de texto OCR)        |
 | `FREELLM_BASE_URL`     | `https://freellmapi.alessandrorios.com/v1`   |
-| `FREELLM_VISION_MODEL` | Opcional; default `gemini-2.5-flash`         |
+| `FREELLM_TEXT_MODEL`   | Opcional; omitir para auto-route             |
 
 **No** uses `EXPO_PUBLIC_TURSO_`*: esas variables irían al bundle del APK.
 
