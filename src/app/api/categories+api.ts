@@ -11,6 +11,7 @@ import {
 } from "@/lib/api-guard";
 import { serializeCategory } from "@/lib/api-serialize";
 import { generateId } from "@/lib/home-defaults";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 const VALID_TYPES = ["expense", "income"] as const;
@@ -93,6 +94,12 @@ export const POST = handle(async (request) => {
       createdAt: new Date(),
     })
     .returning();
+
+  await publishHomeEvent(homeId, {
+    type: "category.created",
+    actorUserId: user.id,
+    entityId: category.id,
+  });
 
   return json({ category: serializeCategory(category) }, 201);
 });

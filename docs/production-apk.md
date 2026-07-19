@@ -38,8 +38,9 @@ Configúralas en EAS Environment Variables para el entorno `production` (visibil
 | `FREELLM_API_KEY`      | Clave FreeLLM (análisis de texto OCR)        |
 | `FREELLM_BASE_URL`     | `https://freellmapi.alessandrorios.com/v1`   |
 | `FREELLM_TEXT_MODEL`   | Opcional; omitir para auto-route             |
+| `REDIS_URL`            | Redis (Streams) para realtime entre miembros |
 
-**No** uses `EXPO_PUBLIC_TURSO_`*: esas variables irían al bundle del APK.
+**No** uses `EXPO_PUBLIC_TURSO_`* ni `EXPO_PUBLIC_REDIS_*`: esas variables irían al bundle del APK.
 
 ## 2. Desplegar el API
 

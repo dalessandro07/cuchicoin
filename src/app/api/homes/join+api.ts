@@ -3,6 +3,7 @@ import { db } from "@/db/server";
 import { ApiError, handle, json, readBody, requireUser } from "@/lib/api-guard";
 import { serializeHome, serializeMember } from "@/lib/api-serialize";
 import { generateId } from "@/lib/home-defaults";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, eq } from "drizzle-orm";
 
 export const POST = handle(async (request) => {
@@ -45,6 +46,12 @@ export const POST = handle(async (request) => {
       .where(eq(members.id, prior.id))
       .returning();
 
+    await publishHomeEvent(home.id, {
+      type: "member.joined",
+      actorUserId: user.id,
+      entityId: member.id,
+    });
+
     return json(
       { home: serializeHome(home), membership: serializeMember(member) },
       201,
@@ -64,6 +71,12 @@ export const POST = handle(async (request) => {
       joinedAt: new Date(),
     })
     .returning();
+
+  await publishHomeEvent(home.id, {
+    type: "member.joined",
+    actorUserId: user.id,
+    entityId: member.id,
+  });
 
   return json(
     { home: serializeHome(home), membership: serializeMember(member) },

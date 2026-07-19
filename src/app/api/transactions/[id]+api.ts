@@ -9,6 +9,7 @@ import {
   requireUser,
 } from "@/lib/api-guard";
 import { getTransactionView } from "@/lib/finance-server";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, eq } from "drizzle-orm";
 
 async function loadOwnedTransaction(userId: string, transactionId: string) {
@@ -105,12 +106,26 @@ export const PATCH = handle(async (request, { id }) => {
     .where(eq(transactions.id, id));
 
   const view = await getTransactionView(id);
+
+  await publishHomeEvent(txn.homeId, {
+    type: "transaction.updated",
+    actorUserId: user.id,
+    entityId: id,
+  });
+
   return json({ transaction: view });
 });
 
 export const DELETE = handle(async (request, { id }) => {
   const user = await requireUser(request);
-  await loadOwnedTransaction(user.id, id);
+  const txn = await loadOwnedTransaction(user.id, id);
   await db.delete(transactions).where(eq(transactions.id, id));
+
+  await publishHomeEvent(txn.homeId, {
+    type: "transaction.deleted",
+    actorUserId: user.id,
+    entityId: id,
+  });
+
   return json({ deleted: true });
 });

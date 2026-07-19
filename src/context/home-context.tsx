@@ -9,6 +9,7 @@
  */
 
 import { useAuth } from "@/hooks/use-auth";
+import { useHomeRealtime } from "@/hooks/use-home-realtime";
 import { useKeyedEffect } from "@/hooks/use-mount-effect";
 import { financeApi, type HomeDetail } from "@/lib/api-client";
 import type {
@@ -222,6 +223,8 @@ export function HomeProvider({ children }: { children: ReactNode }) {
 	}, [refreshDetail]);
 
 	const homeId = detail?.home.id ?? null;
+
+	useHomeRealtime(homeId, status === "in-home" && !!homeId, refreshDetail);
 
 	const createTransaction = useCallback<HomeContextValue["createTransaction"]>(
 		async (input) => {

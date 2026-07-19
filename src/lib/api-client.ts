@@ -350,4 +350,13 @@ export const financeApi = {
       throw err;
     }
   },
+
+  async pollRealtime(
+    homeId: string,
+    after: string,
+  ): Promise<{ events: { type: string }[]; lastId: string }> {
+    return apiFetch('/api/realtime', {
+      query: { homeId, after: after || undefined },
+    });
+  },
 };

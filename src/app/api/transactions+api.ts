@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-guard";
 import { getTransactionView, listTransactions } from "@/lib/finance-server";
 import { generateId } from "@/lib/home-defaults";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, eq } from "drizzle-orm";
 
 export const GET = handle(async (request) => {
@@ -97,5 +98,12 @@ export const POST = handle(async (request) => {
   });
 
   const view = await getTransactionView(id);
+
+  await publishHomeEvent(homeId, {
+    type: "transaction.created",
+    actorUserId: user.id,
+    entityId: id,
+  });
+
   return json({ transaction: view }, 201);
 });

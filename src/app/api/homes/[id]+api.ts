@@ -13,6 +13,7 @@ import {
   serializeMember,
 } from "@/lib/api-serialize";
 import { getBalance, listTransactions } from "@/lib/finance-server";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 export const GET = handle(async (request, { id }) => {
@@ -84,5 +85,12 @@ export const DELETE = handle(async (request, { id }) => {
         isNull(members.leftAt),
       ),
     );
+
+  await publishHomeEvent(id, {
+    type: "member.left",
+    actorUserId: user.id,
+    entityId: membership.id,
+  });
+
   return json({ deleted: false, left: true });
 });

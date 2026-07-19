@@ -19,6 +19,7 @@ import {
   freellmSpeech,
 } from "@/lib/freellm";
 import { generateId } from "@/lib/home-defaults";
+import { publishHomeEvent } from "@/lib/realtime";
 
 const messageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -209,6 +210,14 @@ export const POST = handle(async (request) => {
       categoryId,
       description: tx.description.trim().slice(0, 120),
     });
+
+    if (transactionView) {
+      await publishHomeEvent(homeId, {
+        type: "transaction.created",
+        actorUserId: user.id,
+        entityId: transactionView.id,
+      });
+    }
   } else if (aiParsed.data.ready && !aiParsed.data.transaction) {
     reply =
       reply ||

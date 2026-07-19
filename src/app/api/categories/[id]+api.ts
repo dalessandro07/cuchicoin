@@ -9,6 +9,7 @@ import {
   requireUser,
 } from "@/lib/api-guard";
 import { serializeCategory } from "@/lib/api-serialize";
+import { publishHomeEvent } from "@/lib/realtime";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 async function loadOwnedCategory(userId: string, categoryId: string) {
@@ -66,12 +67,18 @@ export const PATCH = handle(async (request, { id }) => {
     .where(eq(categories.id, id))
     .returning();
 
+  await publishHomeEvent(category.homeId, {
+    type: "category.updated",
+    actorUserId: user.id,
+    entityId: id,
+  });
+
   return json({ category: serializeCategory(updated) });
 });
 
 export const DELETE = handle(async (request, { id }) => {
   const user = await requireUser(request);
-  await loadOwnedCategory(user.id, id);
+  const category = await loadOwnedCategory(user.id, id);
 
   const [inUse] = await db
     .select({ id: transactions.id })
@@ -86,6 +93,12 @@ export const DELETE = handle(async (request, { id }) => {
   }
 
   await db.delete(categories).where(eq(categories.id, id));
+
+  await publishHomeEvent(category.homeId, {
+    type: "category.deleted",
+    actorUserId: user.id,
+    entityId: id,
+  });
 
   return json({ deleted: true });
 });
